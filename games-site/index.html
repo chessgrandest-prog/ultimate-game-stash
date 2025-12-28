@@ -12,6 +12,10 @@
   <div class="controls">
     <input id="search" type="text" placeholder="Search games...">
     <button id="themeToggle">🌙 Toggle Theme</button>
+    <label class="favorites-toggle">
+      <input type="checkbox" id="showFavorites">
+      Show Favorites
+    </label>
   </div>
 </header>
 
@@ -32,15 +36,57 @@
 </footer>
 
 <script>
+const DEFAULT_THUMBNAIL = 'https://via.placeholder.com/200x120?text=Game';
+const FAVORITES_KEY = 'favoriteGames';
+
+// Load favorites from localStorage
+let favoriteGames = JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
+
+// Theme toggle
 let darkMode = false;
 const body = document.body;
 const themeBtn = document.getElementById('themeToggle');
-
 themeBtn.addEventListener('click', () => {
   darkMode = !darkMode;
   if(darkMode) body.classList.add('dark');
   else body.classList.remove('dark');
 });
+
+// Show favorites toggle
+const showFavoritesCheckbox = document.getElementById('showFavorites');
+showFavoritesCheckbox.addEventListener('change', fetchGames);
+
+// Toggle favorite status
+function toggleFavorite(gameUrl) {
+  if (favoriteGames.includes(gameUrl)) {
+    favoriteGames = favoriteGames.filter(url => url !== gameUrl);
+  } else {
+    favoriteGames.push(gameUrl);
+  }
+  localStorage.setItem(FAVORITES_KEY, JSON.stringify(favoriteGames));
+  fetchGames(); // refresh to update star icons
+}
+
+// Render a game card
+function renderCard(game) {
+  const gamePath = encodeURIComponent(game.url.split('/').pop());
+  const thumbnail = game.thumbnail || DEFAULT_THUMBNAIL;
+  const isFav = favoriteGames.includes(game.url);
+
+  return `
+    <div class="game-card">
+      <a href="/game/${gamePath}" target="_blank">
+        <div class="thumbnail-container">
+          <img src="${thumbnail}" alt="${game.title}">
+        </div>
+        <div class="game-title">${game.title}</div>
+      </a>
+      <button class="favorite-btn" onclick="toggleFavorite('${game.url}')">
+        ${isFav ? '⭐' : '☆'}
+      </button>
+    </div>
+  `;
+}
 
 // Fetch and display games
 async function fetchGames() {
@@ -49,9 +95,13 @@ async function fetchGames() {
     const games = await res.json();
 
     const searchQuery = document.getElementById('search').value.toLowerCase();
-    const filteredGames = searchQuery
+    let filteredGames = searchQuery
       ? games.filter(game => game.title.toLowerCase().includes(searchQuery))
       : games;
+
+    if (showFavoritesCheckbox.checked) {
+      filteredGames = filteredGames.filter(game => favoriteGames.includes(game.url));
+    }
 
     const featured = filteredGames.slice(0, 5);
 
@@ -63,24 +113,13 @@ async function fetchGames() {
 
     document.getElementById('totalGames').textContent =
       `Total games: ${filteredGames.length} / ${games.length}`;
-
   } catch (err) {
     console.error('Error fetching games.json:', err);
     document.getElementById('totalGames').textContent = 'Failed to load games.';
   }
 }
 
-function renderCard(game) {
-  const gamePath = encodeURIComponent(game.url.split('/').pop());
-  return `
-    <div class="game-card">
-      <a href="/game/${gamePath}" target="_blank">
-        <div class="game-title">${game.title}</div>
-      </a>
-    </div>
-  `;
-}
-
+// Initial fetch
 fetchGames();
 document.getElementById('search').addEventListener('input', fetchGames);
 </script>
