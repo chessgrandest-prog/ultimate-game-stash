@@ -1,3 +1,7 @@
+const HTML_URL = 'https://raw.githubusercontent.com/chessgrandest-prog/ultimate-game-stash/refs/heads/main/games-site/index.html';
+const CSS_URL = 'https://raw.githubusercontent.com/chessgrandest-prog/ultimate-game-stash/refs/heads/main/games-site/style.css';
+const JS_URL = 'https://raw.githubusercontent.com/chessgrandest-prog/ultimate-game-stash/refs/heads/main/games-site/worker.js';
+
 export default {
   async fetch(request) {
     const url = new URL(request.url);
