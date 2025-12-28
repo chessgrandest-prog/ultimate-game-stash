@@ -14,7 +14,7 @@
 
 <main>
   <section id="featuredSection">
-    <h2>New & Featured</h2>
+    <h2>Featured Games</h2>
     <div id="featuredGrid" class="games-grid"></div>
   </section>
 
@@ -31,18 +31,17 @@
 <script>
 async function fetchGames() {
   try {
-    // Replace with your Netlify URL for games.json
-    const res = await fetch('https://creative-squirrel-bca5c2.netlify.app//games.json');
+    // Fetch from Worker URL
+    const res = await fetch('/games.json');
     const games = await res.json();
 
     const searchQuery = document.getElementById('search').value.toLowerCase();
 
-    // Filter games by search
     const filteredGames = searchQuery
       ? games.filter(game => game.title.toLowerCase().includes(searchQuery))
       : games;
 
-    // Featured games = first 5 games (you can adjust)
+    // Featured = first 5
     const featured = filteredGames.slice(0, 5);
 
     const featuredGrid = document.getElementById('featuredGrid');
@@ -71,16 +70,17 @@ async function fetchGames() {
 
     document.getElementById('totalGames').textContent =
       `Total games: ${filteredGames.length} / ${games.length}`;
+
   } catch (err) {
     console.error('Error fetching games.json:', err);
     document.getElementById('totalGames').textContent = 'Failed to load games.';
   }
 }
 
-// Fetch games initially
+// Initial fetch
 fetchGames();
 
-// Search filter
+// Search updates in real-time
 document.getElementById('search').addEventListener('input', fetchGames);
 </script>
 </body>

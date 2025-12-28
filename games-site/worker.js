@@ -1,6 +1,6 @@
+// URLs for assets hosted on Netlify
 const HTML_URL = 'https://creative-squirrel-bca5c2.netlify.app/games-site/index.html';
 const CSS_URL  = 'https://creative-squirrel-bca5c2.netlify.app/games-site/style.css';
-const JS_URL   = 'https://creative-squirrel-bca5c2.netlify.app/games-site/app.js';
 const JSON_URL = 'https://creative-squirrel-bca5c2.netlify.app/games.json';
 
 export default {
@@ -20,7 +20,7 @@ export default {
       }
     }
 
-    // Serve CSS
+    // Serve style.css
     if (url.pathname === '/style.css') {
       try {
         const res = await fetch(CSS_URL);
@@ -33,20 +33,7 @@ export default {
       }
     }
 
-    // Serve JS
-    if (url.pathname === '/app.js') {
-      try {
-        const res = await fetch(JS_URL);
-        const js = await res.text();
-        return new Response(js, {
-          headers: { 'Content-Type': 'application/javascript; charset=UTF-8' }
-        });
-      } catch {
-        return new Response('Error loading app.js', { status: 500 });
-      }
-    }
-
-    // Serve games.json
+    // Serve games.json via Worker (fetch from Netlify)
     if (url.pathname === '/games.json') {
       try {
         const res = await fetch(JSON_URL);
