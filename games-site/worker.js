@@ -1,14 +1,13 @@
-// Replace these with your actual GitHub Raw URLs
 const HTML_URL = 'https://creative-squirrel-bca5c2.netlify.app/games-site/index.html';
 const CSS_URL  = 'https://creative-squirrel-bca5c2.netlify.app/games-site/style.css';
-const JS_URL   = 'https://creative-squirrel-bca5c2.netlify.app/games-site/worker.js';
-const JSON_URL = 'https://raw.githubusercontent.com/chessgrandest-prog/ultimate-game-stash/refs/heads/main/games.json';
+const JS_URL   = 'https://creative-squirrel-bca5c2.netlify.app/games-site/app.js';
+const JSON_URL = 'https://creative-squirrel-bca5c2.netlify.app/games.json';
 
 export default {
   async fetch(request) {
     const url = new URL(request.url);
 
-    // Serve the game library page
+    // Serve index.html
     if (url.pathname === '/' || url.pathname === '/index.html') {
       try {
         const res = await fetch(HTML_URL);
@@ -21,7 +20,7 @@ export default {
       }
     }
 
-    // Serve style.css
+    // Serve CSS
     if (url.pathname === '/style.css') {
       try {
         const res = await fetch(CSS_URL);
@@ -34,7 +33,7 @@ export default {
       }
     }
 
-    // Serve app.js
+    // Serve JS
     if (url.pathname === '/app.js') {
       try {
         const res = await fetch(JS_URL);

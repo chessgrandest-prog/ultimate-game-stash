@@ -10,21 +10,78 @@
 <header>
   <h1>Game Library</h1>
   <input id="search" type="text" placeholder="Search games...">
-  <div id="categories"></div>
 </header>
+
 <main>
   <section id="featuredSection">
     <h2>New & Featured</h2>
-    <div id="featuredGrid"></div>
+    <div id="featuredGrid" class="games-grid"></div>
   </section>
+
   <section id="allGamesSection">
     <h2>All Games</h2>
-    <div id="gamesGrid"></div>
+    <div id="gamesGrid" class="games-grid"></div>
   </section>
 </main>
+
 <footer>
   <p id="totalGames"></p>
 </footer>
-<script src="/app.js"></script> <!-- optional separate JS -->
+
+<script>
+async function fetchGames() {
+  try {
+    // Replace with your Netlify URL for games.json
+    const res = await fetch('https://creative-squirrel-bca5c2.netlify.app//games.json');
+    const games = await res.json();
+
+    const searchQuery = document.getElementById('search').value.toLowerCase();
+
+    // Filter games by search
+    const filteredGames = searchQuery
+      ? games.filter(game => game.title.toLowerCase().includes(searchQuery))
+      : games;
+
+    // Featured games = first 5 games (you can adjust)
+    const featured = filteredGames.slice(0, 5);
+
+    const featuredGrid = document.getElementById('featuredGrid');
+    featuredGrid.innerHTML = featured.map(game => {
+      const gamePath = encodeURIComponent(game.url.split('/').pop());
+      return `
+        <div class="game-card">
+          <a href="/game/${gamePath}" target="_blank">
+            <div class="game-title">${game.title}</div>
+          </a>
+        </div>
+      `;
+    }).join('');
+
+    const allGrid = document.getElementById('gamesGrid');
+    allGrid.innerHTML = filteredGames.map(game => {
+      const gamePath = encodeURIComponent(game.url.split('/').pop());
+      return `
+        <div class="game-card">
+          <a href="/game/${gamePath}" target="_blank">
+            <div class="game-title">${game.title}</div>
+          </a>
+        </div>
+      `;
+    }).join('');
+
+    document.getElementById('totalGames').textContent =
+      `Total games: ${filteredGames.length} / ${games.length}`;
+  } catch (err) {
+    console.error('Error fetching games.json:', err);
+    document.getElementById('totalGames').textContent = 'Failed to load games.';
+  }
+}
+
+// Fetch games initially
+fetchGames();
+
+// Search filter
+document.getElementById('search').addEventListener('input', fetchGames);
+</script>
 </body>
 </html>
