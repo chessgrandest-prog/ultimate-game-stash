@@ -1,7 +1,7 @@
 // Replace these with your actual GitHub Raw URLs
-const HTML_URL = 'https://chessgrandest-prog.github.io/ultimate-game-stash/games-site/index.html';
-const CSS_URL  = 'https://chessgrandest-prog.github.io/ultimate-game-stash/games-site/style.css';
-const JS_URL   = 'https://chessgrandest-prog.github.io/ultimate-game-stash/games-site/worker.js';
+const HTML_URL = 'https://creative-squirrel-bca5c2.netlify.app/games-site/index.html';
+const CSS_URL  = 'https://creative-squirrel-bca5c2.netlify.app/games-site/style.css';
+const JS_URL   = 'https://creative-squirrel-bca5c2.netlify.app/games-site/worker.js';
 const JSON_URL = 'https://raw.githubusercontent.com/chessgrandest-prog/ultimate-game-stash/refs/heads/main/games.json';
 
 export default {
