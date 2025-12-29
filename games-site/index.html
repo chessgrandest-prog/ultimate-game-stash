@@ -68,12 +68,7 @@ function toggleFavorite(gameUrl) {
 // Render card
 function renderCard(game) {
   const gamePath = encodeURIComponent(game.url.split('/').pop());
-
-  // 🔥 USE image FIELD + FIX SLASHES
-  const thumbnail = game.image
-    ? '/' + game.image.replace(/\\/g, '/')
-    : DEFAULT_THUMBNAIL;
-
+  const thumbnail = game.image || DEFAULT_THUMBNAIL;
   const isFav = favoriteGames.includes(game.url);
 
   return `
@@ -92,14 +87,13 @@ function renderCard(game) {
   `;
 }
 
-// Fetch games
+// Fetch and display games
 async function fetchGames() {
   try {
     const res = await fetch('/games.json');
     const games = await res.json();
 
     const searchQuery = document.getElementById('search').value.toLowerCase();
-
     let filteredGames = searchQuery
       ? games.filter(g => g.title.toLowerCase().includes(searchQuery))
       : games;
@@ -128,6 +122,5 @@ async function fetchGames() {
 fetchGames();
 document.getElementById('search').addEventListener('input', fetchGames);
 </script>
-
 </body>
 </html>
