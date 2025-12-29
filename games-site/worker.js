@@ -34,6 +34,32 @@ export default {
       }
     }
 
+    // Serve paginated games.json
+    if (url.pathname === '/games+img.json') {
+      try {
+        const gamesRes = await fetch(GAMES_JSON_URL);
+        const games = await gamesRes.json();
+
+        // Pagination query params
+        const page = parseInt(url.searchParams.get('page') || '1');
+        const limit = parseInt(url.searchParams.get('limit') || '100');
+
+        const start = (page - 1) * limit;
+        const paginatedGames = games.slice(start, start + limit);
+
+        return new Response(JSON.stringify({
+          total: games.length,
+          page,
+          limit,
+          games: paginatedGames
+        }), {
+          headers: { 'Content-Type': 'application/json; charset=UTF-8' }
+        });
+      } catch (err) {
+        return new Response('Error fetching games.json', { status: 500 });
+      }
+    }
+
     // Serve game pages
     if (url.pathname.startsWith('/game/')) {
       try {
@@ -66,7 +92,7 @@ export default {
       }
     }
 
-    // Fallback: proxy everything else (images, JSON, etc.)
+    // Fallback: proxy everything else (images, etc.)
     return fetch(request);
   }
 };

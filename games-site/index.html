@@ -28,6 +28,13 @@
   <section id="allGamesSection">
     <h2>All Games</h2>
     <div id="gamesGrid" class="games-grid"></div>
+
+    <!-- Pagination controls -->
+    <div style="text-align:center; margin: 10px;">
+      <button id="prevPage" onclick="prevPage()">Previous</button>
+      <span id="pageInfo"></span>
+      <button id="nextPage" onclick="nextPage()">Next</button>
+    </div>
   </section>
 </main>
 
@@ -50,7 +57,13 @@ document.getElementById('themeToggle').addEventListener('click', () => {
 
 // Favorites filter
 const showFavoritesCheckbox = document.getElementById('showFavorites');
-showFavoritesCheckbox.addEventListener('change', fetchGames);
+showFavoritesCheckbox.addEventListener('change', () => { currentPage = 1; fetchGames(); });
+
+// Pagination
+const GAMES_PER_PAGE = 100;
+let currentPage = 1;
+let totalGames = 0;
+let currentGames = [];
 
 // Toggle favorite
 function toggleFavorite(gameUrl) {
@@ -60,10 +73,10 @@ function toggleFavorite(gameUrl) {
     favoriteGames.push(gameUrl);
   }
   localStorage.setItem(FAVORITES_KEY, JSON.stringify(favoriteGames));
-  fetchGames();
+  renderPage();
 }
 
-// Render card
+// Render a game card
 function renderCard(game) {
   const gamePath = encodeURIComponent(game.url.split('/').pop());
   const thumbnail = game.image || DEFAULT_THUMBNAIL;
@@ -85,38 +98,51 @@ function renderCard(game) {
   `;
 }
 
-// Fetch and display games
+// Render the current page
+function renderPage() {
+  document.getElementById('gamesGrid').innerHTML = currentGames.map(renderCard).join('');
+  document.getElementById('featuredGrid').innerHTML = currentGames.slice(0, 5).map(renderCard).join('');
+
+  document.getElementById('totalGames').textContent =
+    `Showing page ${currentPage} of ${Math.ceil(totalGames / GAMES_PER_PAGE)} (Total games: ${totalGames})`;
+
+  document.getElementById('pageInfo').textContent = `Page ${currentPage}`;
+  document.getElementById('prevPage').disabled = currentPage === 1;
+  document.getElementById('nextPage').disabled = currentPage * GAMES_PER_PAGE >= totalGames;
+}
+
+// Fetch games from Worker paginated endpoint
 async function fetchGames() {
   try {
-    const res = await fetch('/games+img.json'); // <--- updated
-    const games = await res.json();
-
     const searchQuery = document.getElementById('search').value.toLowerCase();
-    let filteredGames = searchQuery
-      ? games.filter(g => g.title.toLowerCase().includes(searchQuery))
-      : games;
+    const favFilter = showFavoritesCheckbox.checked ? '1' : '0';
 
-    if (showFavoritesCheckbox.checked) {
-      filteredGames = filteredGames.filter(g => favoriteGames.includes(g.url));
-    }
+    const res = await fetch(`/games+img.json?page=${currentPage}&limit=${GAMES_PER_PAGE}`);
+    const data = await res.json();
+    totalGames = data.total;
 
-    const featured = filteredGames.slice(0, 5);
+    // Filter favorites & search on the page subset
+    currentGames = data.games.filter(game => {
+      let keep = true;
+      if (favFilter === '1') keep = favoriteGames.includes(game.url);
+      if (searchQuery) keep = keep && game.title.toLowerCase().includes(searchQuery);
+      return keep;
+    });
 
-    document.getElementById('featuredGrid').innerHTML =
-      featured.map(renderCard).join('');
-    document.getElementById('gamesGrid').innerHTML =
-      filteredGames.map(renderCard).join('');
-    document.getElementById('totalGames').textContent =
-      `Total games: ${filteredGames.length} / ${games.length}`;
+    renderPage();
   } catch (err) {
     console.error(err);
     document.getElementById('totalGames').textContent = 'Failed to load games.';
   }
 }
 
-// Init
+// Pagination handlers
+function nextPage() { currentPage++; fetchGames(); }
+function prevPage() { currentPage--; fetchGames(); }
+
+// Initialize
 fetchGames();
-document.getElementById('search').addEventListener('input', fetchGames);
+document.getElementById('search').addEventListener('input', () => { currentPage = 1; fetchGames(); });
 </script>
 </body>
 </html>
