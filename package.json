@@ -1,0 +1,26 @@
+{
+  "name": "ultimate-game-stash",
+  "version": "1.0.0",
+  "description": "",
+  "main": "fetch-thumbnails.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chessgrandest-prog/ultimate-game-stash.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/chessgrandest-prog/ultimate-game-stash/issues"
+  },
+  "homepage": "https://github.com/chessgrandest-prog/ultimate-game-stash#readme",
+  "dependencies": {
+    "jsdom": "^27.4.0",
+    "node-fetch": "^3.3.2",
+    "slugify": "^1.6.6"
+  }
+}
