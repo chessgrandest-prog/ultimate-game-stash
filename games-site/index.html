@@ -38,8 +38,6 @@
 <script>
 const DEFAULT_THUMBNAIL = 'https://via.placeholder.com/200x120?text=Game';
 const FAVORITES_KEY = 'favoriteGames';
-
-// Load favorites
 let favoriteGames = JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
 
 // Theme toggle
@@ -90,7 +88,7 @@ function renderCard(game) {
 // Fetch and display games
 async function fetchGames() {
   try {
-    const res = await fetch('/games.json');
+    const res = await fetch('/games+img.json'); // <--- updated
     const games = await res.json();
 
     const searchQuery = document.getElementById('search').value.toLowerCase();
@@ -106,10 +104,8 @@ async function fetchGames() {
 
     document.getElementById('featuredGrid').innerHTML =
       featured.map(renderCard).join('');
-
     document.getElementById('gamesGrid').innerHTML =
       filteredGames.map(renderCard).join('');
-
     document.getElementById('totalGames').textContent =
       `Total games: ${filteredGames.length} / ${games.length}`;
   } catch (err) {
