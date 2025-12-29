@@ -114,20 +114,15 @@ function renderPage() {
 // Fetch games from Worker paginated endpoint
 async function fetchGames() {
   try {
-    const searchQuery = document.getElementById('search').value.toLowerCase();
+    const searchQuery = document.getElementById('search').value;
     const favFilter = showFavoritesCheckbox.checked ? '1' : '0';
+    const favList = JSON.stringify(favoriteGames);
 
-    const res = await fetch(`/games+img.json?page=${currentPage}&limit=${GAMES_PER_PAGE}`);
+    const res = await fetch(`/games+img.json?page=${currentPage}&limit=${GAMES_PER_PAGE}&search=${encodeURIComponent(searchQuery)}&favorites=${favFilter}&favList=${encodeURIComponent(favList)}`);
     const data = await res.json();
-    totalGames = data.total;
 
-    // Filter favorites & search on the page subset
-    currentGames = data.games.filter(game => {
-      let keep = true;
-      if (favFilter === '1') keep = favoriteGames.includes(game.url);
-      if (searchQuery) keep = keep && game.title.toLowerCase().includes(searchQuery);
-      return keep;
-    });
+    totalGames = data.total;
+    currentGames = data.games;
 
     renderPage();
   } catch (err) {
@@ -135,6 +130,7 @@ async function fetchGames() {
     document.getElementById('totalGames').textContent = 'Failed to load games.';
   }
 }
+
 
 // Pagination handlers
 function nextPage() { currentPage++; fetchGames(); }
