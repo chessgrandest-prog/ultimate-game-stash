@@ -86,24 +86,45 @@ export default {
         });
       }
 
-      // 3️⃣ GitHub Proxy Route
+      // 3️⃣ Smart Proxy Route
       if (path.startsWith("/proxy/")) {
         const targetUrl = request.url.split("/proxy/")[1];
         if (!targetUrl) return new Response("Missing target URL", { status: 400 });
 
         const res = await fetch(targetUrl);
+        if (!res.ok) return res;
+
         const headers = new Headers(res.headers);
-        
-        // FORCE text/html so the browser executes the code instead of showing raw text
-        headers.set("Content-Type", "text/html; charset=UTF-8");
-        
+        const contentType = headers.get("Content-Type") || "";
+
+        // Force HTML type for GitHub raw links that default to plain text
+        if (targetUrl.endsWith(".html") || targetUrl.endsWith(".htm") || contentType.includes("text/plain")) {
+          headers.set("Content-Type", "text/html; charset=UTF-8");
+        } else if (targetUrl.endsWith(".js")) {
+          headers.set("Content-Type", "application/javascript");
+        } else if (targetUrl.endsWith(".css")) {
+          headers.set("Content-Type", "text/css");
+        }
+
         headers.set("Cross-Origin-Embedder-Policy", "require-corp");
         headers.set("Cross-Origin-Opener-Policy", "same-origin");
-        
-        // Remove headers that prevent iframe loading
         headers.delete("X-Frame-Options");
-        headers.delete("Content-Security-Policy"); 
-        
+        headers.delete("Content-Security-Policy");
+
+        // If it's HTML, rewrite relative URLs to use our proxy
+        if (headers.get("Content-Type").includes("text/html")) {
+          let html = await res.text();
+          const baseUrl = targetUrl.substring(0, targetUrl.lastIndexOf("/") + 1);
+          
+          // Basic rewrite for relative src and href (handles simple cases)
+          html = html.replace(/(src|href)=["'](?!(http|https|\/\/))([^"']+)["']/gi, (match, p1, p2, p3) => {
+            const absolute = new URL(p3, baseUrl).href;
+            return `${p1}="/proxy/${absolute}"`;
+          });
+
+          return new Response(html, { status: res.status, headers });
+        }
+
         return new Response(res.body, { status: res.status, headers });
       }
 
