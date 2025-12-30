@@ -45,10 +45,15 @@ export default {
 
       // 2️⃣ Game Player Route
       if (path === "/play") {
-        const gameUrl = url.searchParams.get("url");
+        let gameUrl = url.searchParams.get("url");
         const gameTitle = url.searchParams.get("title") || "Game";
         
         if (!gameUrl) return new Response("Missing game URL", { status: 400 });
+
+        // If it's a raw github URL, proxy it through our worker to avoid blocks and set headers
+        if (gameUrl.includes("raw.githubusercontent.com")) {
+          gameUrl = `/proxy/${gameUrl}`;
+        }
 
         const playerHtml = `
           <!DOCTYPE html>
@@ -81,7 +86,23 @@ export default {
         });
       }
 
-      // 3️⃣ Serve static assets
+      // 3️⃣ GitHub Proxy Route
+      if (path.startsWith("/proxy/")) {
+        const targetUrl = request.url.split("/proxy/")[1];
+        if (!targetUrl) return new Response("Missing target URL", { status: 400 });
+
+        const res = await fetch(targetUrl);
+        const headers = new Headers(res.headers);
+        headers.set("Cross-Origin-Embedder-Policy", "require-corp");
+        headers.set("Cross-Origin-Opener-Policy", "same-origin");
+        // Ensure we don't send X-Frame-Options that might block our own iframe
+        headers.delete("X-Frame-Options");
+        headers.delete("Content-Security-Policy"); 
+        
+        return new Response(res.body, { status: res.status, headers });
+      }
+
+      // 4️⃣ Serve static assets
       const assetResponse = await env.ASSETS.fetch(request);
       if (assetResponse.status !== 404) return assetResponse;
 
