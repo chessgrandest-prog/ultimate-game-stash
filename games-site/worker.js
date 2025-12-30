@@ -69,38 +69,52 @@ export default {
       }
     }
 
-    // Serve Terraria from cached ZIP
+    // Serve Terraria from cached ZIP (folder-aware)
     if (url.pathname.startsWith('/terraria/')) {
       try {
-        let filePath = url.pathname.replace('/terraria/', '');
-        if (!filePath || filePath === '') filePath = 'index.html';
+        let filePath = url.pathname.replace('/terraria/', '').replace(/^\/+|\/+$/g, '');
+        if (!filePath) filePath = 'index.html';
 
-        // Fetch and cache ZIP once
         if (!cachedZip) {
           console.log('Fetching Terraria ZIP...');
           const zipRes = await fetch(TERRARIA_ZIP_URL);
-          console.log('ZIP fetch status:', zipRes.status, 'content-type:', zipRes.headers.get('content-type'));
-
           if (!zipRes.ok) return new Response('Failed to fetch Terraria ZIP', { status: 500 });
+
           const buffer = new Uint8Array(await zipRes.arrayBuffer());
           try {
-            cachedZip = unzipSync(buffer);
+            const zipFiles = unzipSync(buffer);
+            cachedZip = {};
+            // Normalize paths (forward slashes)
+            for (const [path, content] of Object.entries(zipFiles)) {
+              cachedZip[path.replace(/\\/g, '/')] = content;
+            }
+            console.log('ZIP files:', Object.keys(cachedZip));
           } catch (e) {
             console.error('Failed to unzip Terraria ZIP:', e);
             return new Response('Invalid ZIP file', { status: 500 });
           }
         }
 
-        if (!(filePath in cachedZip)) return new Response('File not found in ZIP', { status: 404 });
+        // Try exact match or search inside folders
+        let contentBuffer = cachedZip[filePath];
+        if (!contentBuffer) {
+          const lowerFile = filePath.toLowerCase();
+          for (const zipPath of Object.keys(cachedZip)) {
+            if (zipPath.toLowerCase().endsWith('/' + lowerFile) || zipPath.toLowerCase() === lowerFile) {
+              contentBuffer = cachedZip[zipPath];
+              break;
+            }
+          }
+        }
+        if (!contentBuffer) return new Response('File not found in ZIP', { status: 404 });
 
-        const contentBuffer = cachedZip[filePath];
         const isText = filePath.endsWith('.html') || filePath.endsWith('.js') || filePath.endsWith('.css');
         const contentType = filePath.endsWith('.wasm') ? 'application/wasm' :
                             filePath.endsWith('.js') ? 'application/javascript' :
                             filePath.endsWith('.css') ? 'text/css' :
                             filePath.endsWith('.png') ? 'image/png' :
                             filePath.endsWith('.jpg') || filePath.endsWith('.jpeg') ? 'image/jpeg' :
-                            'text/html';
+                            'application/octet-stream';
 
         return addWasmHeaders(new Response(isText ? new TextDecoder().decode(contentBuffer) : contentBuffer, {
           headers: { 'Content-Type': contentType }
