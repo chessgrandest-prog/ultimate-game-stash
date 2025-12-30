@@ -130,10 +130,16 @@ export default {
   function wrapUrl(url) {
     if (!url || typeof url !== 'string') return url;
     // Check if it's already proxied (handle both relative and absolute proxy URLs)
-    if (url.startsWith(proxyPrefix) || url.startsWith('/proxy/') || url.startsWith('data:') || url.startsWith('blob:')) return url;
+    if (url.startsWith(proxyPrefix) || url.startsWith('/proxy/') || url.includes('/proxy/http')) return url;
+    
+    // If it's a relative URL resolving against a proxy URL, strip the proxy prefix from base if needed
+    // However, baseUrl here is the original GitHub URL, so it's fine.
     
     let absoluteUrl;
     try {
+      // If the URL is already absolute and contains 'proxy', return it
+      if (url.includes(workerOrigin + '/proxy/')) return url;
+      
       absoluteUrl = new URL(url, baseUrl).href;
     } catch (e) {
       return url;
@@ -219,7 +225,7 @@ export default {
           // Improved regex for src, href, and action attributes
           html = html.replace(/(src|href|action)=["']([^"']+)["']/gi, (match, attr, val) => {
             // Skip already proxied, data, or absolute URLs that are same-origin
-            if (val.startsWith(origin + "/proxy/") || val.startsWith("/proxy/") || val.startsWith("data:") || val.startsWith("blob:") || val.startsWith("#")) {
+            if (val.includes('/proxy/') || val.startsWith("data:") || val.startsWith("blob:") || val.startsWith("#")) {
               return match;
             }
             
