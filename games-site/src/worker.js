@@ -93,9 +93,14 @@ export default {
 
         const res = await fetch(targetUrl);
         const headers = new Headers(res.headers);
+        
+        // FORCE text/html so the browser executes the code instead of showing raw text
+        headers.set("Content-Type", "text/html; charset=UTF-8");
+        
         headers.set("Cross-Origin-Embedder-Policy", "require-corp");
         headers.set("Cross-Origin-Opener-Policy", "same-origin");
-        // Ensure we don't send X-Frame-Options that might block our own iframe
+        
+        // Remove headers that prevent iframe loading
         headers.delete("X-Frame-Options");
         headers.delete("Content-Security-Policy"); 
         
