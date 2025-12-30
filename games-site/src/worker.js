@@ -88,8 +88,14 @@ export default {
 
       // 3️⃣ Smart Proxy Route
       if (path.startsWith("/proxy/")) {
-        const targetUrl = request.url.split("/proxy/")[1];
+        let targetUrl = request.url.split("/proxy/")[1];
         if (!targetUrl) return new Response("Missing target URL", { status: 400 });
+
+        // Auto-fix for known broken 2048 assets
+        if (targetUrl.includes("cdn.jsdelivr.net/gh/qollaaa/j") && targetUrl.includes("/Games/2048/")) {
+          targetUrl = targetUrl.replace(/gh\/qollaaa\/j@[^\/]+\/Games\/2048\//i, "gh/gabrielecirulli/2048/");
+          console.log(`Auto-mapped broken asset to: ${targetUrl}`);
+        }
 
         console.log(`Proxy fetching: ${targetUrl}`);
 
