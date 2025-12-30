@@ -65,14 +65,20 @@ export default {
     }
 
     // Serve individual game pages
-    if (url.pathname.startsWith('/game/')) {
-      try {
-        const gameFile = decodeURIComponent(url.pathname.replace('/game/', ''));
-        const gamesRes = await fetch(GAMES_JSON_URL);
-        const games = await gamesRes.json();
+    // Serve individual game pages
+if (url.pathname.startsWith('/game/')) {
+  try {
+    const gameFile = decodeURIComponent(url.pathname.replace('/game/', ''));
+    const gamesRes = await fetch(GAMES_JSON_URL);
+    const games = await gamesRes.json();
 
-        const game = games.find(g => g.url.endsWith(gameFile) || g.url === gameFile);
-        if (!game) return new Response('Game not found', { status: 404 });
+    const game = games.find(g => g.url.endsWith(gameFile) || g.url === gameFile);
+    if (!game) return new Response('Game not found', { status: 404 });
+
+    // 🚨 WASM / COOP games MUST be top-level
+    if (game.url.startsWith('/terraria/')) {
+      return Response.redirect(new URL(game.url, url.origin), 302);
+    }
 
         // Detect GitHub Pages URLs
         if (game.url.includes(".github.io")) {
