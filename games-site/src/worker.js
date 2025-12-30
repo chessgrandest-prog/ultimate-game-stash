@@ -91,13 +91,14 @@ export default {
         const targetUrl = request.url.split("/proxy/")[1];
         if (!targetUrl) return new Response("Missing target URL", { status: 400 });
 
-        const res = await fetch(targetUrl);
-        if (!res.ok) return res;
+        console.log(`Proxy fetching: ${targetUrl}`);
 
+        const res = await fetch(targetUrl);
+        
         const headers = new Headers(res.headers);
         const contentType = headers.get("Content-Type") || "";
 
-        // Determine correct Content-Type based on extension first, then fallback to original
+        // Determine correct Content-Type based on extension first
         const lowerUrl = targetUrl.toLowerCase();
         if (lowerUrl.endsWith(".js") || lowerUrl.includes(".js?") || lowerUrl.includes(".js#") || lowerUrl.endsWith("/js")) {
           headers.set("Content-Type", "application/javascript; charset=UTF-8");
@@ -111,6 +112,11 @@ export default {
         headers.set("Cross-Origin-Opener-Policy", "same-origin");
         headers.delete("X-Frame-Options");
         headers.delete("Content-Security-Policy");
+
+        if (!res.ok) {
+          console.error(`Proxy 404/Error: ${res.status} for ${targetUrl}`);
+          return new Response(res.body, { status: res.status, headers });
+        }
 
         // If it's HTML, rewrite relative URLs to use our proxy
         if (headers.get("Content-Type").includes("text/html")) {
@@ -129,19 +135,15 @@ export default {
   function wrapUrl(url) {
     if (!url || typeof url !== 'string') return url;
     
-    // If it's already a full proxy URL on our origin, leave it
-    if (url.startsWith(proxyPrefix)) return url;
-    
-    // If it's a relative /proxy/ path, make it absolute
-    if (url.startsWith('/proxy/')) return workerOrigin + url;
-
-    // Avoid double proxying if it somehow resolved to GitHub/proxy/...
+    // Aggressively check for any existing proxy pattern in the URL
     if (url.includes('/proxy/http')) {
-       const actualUrl = url.split('/proxy/')[1];
-       if (actualUrl) return proxyPrefix + actualUrl;
-       return url;
+       // Extract the actual target URL from the nested structure
+       const parts = url.split('/proxy/');
+       const lastPart = parts[parts.length - 1];
+       if (lastPart && lastPart.startsWith('http')) return proxyPrefix + lastPart;
     }
-    
+
+    if (url.startsWith(proxyPrefix)) return url;
     if (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('#')) return url;
     
     let absoluteUrl;
