@@ -64,15 +64,19 @@ export default {
       }
     }
 
-    // Serve Terraria WASM and other assets
+    // Serve Terraria WASM and assets
     if (url.pathname.startsWith('/terraria/')) {
       try {
-        const filePath = url.pathname.replace('/terraria/', '');
-        const fileUrl = `https://raw.githubusercontent.com/chessgrandest-prog/ultimate-game-stash/refs/heads/main/games-site/terraria/${filePath || 'index.html'}`;
+        // ✅ Fixed filePath fallback
+        let filePath = url.pathname.replace('/terraria/', '');
+        if (!filePath || filePath === '') filePath = 'index.html';
+
+        const fileUrl = `https://raw.githubusercontent.com/chessgrandest-prog/ultimate-game-stash/refs/heads/main/games-site/terraria/${filePath}`;
 
         const res = await fetch(fileUrl);
         if (!res.ok) return new Response('File not found', { status: 404 });
 
+        // Detect content type
         let contentType = 'text/html';
         if (filePath.endsWith('.js')) contentType = 'application/javascript';
         else if (filePath.endsWith('.wasm')) contentType = 'application/wasm';
@@ -80,7 +84,8 @@ export default {
         else if (filePath.endsWith('.png')) contentType = 'image/png';
         else if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) contentType = 'image/jpeg';
 
-        const body = filePath.endsWith('.wasm') || filePath.endsWith('.png') || filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')
+        // Use arrayBuffer for binary files
+        const body = ['.wasm', '.png', '.jpg', '.jpeg'].some(ext => filePath.endsWith(ext))
           ? await res.arrayBuffer()
           : await res.text();
 
@@ -140,7 +145,7 @@ export default {
       }
     }
 
-    // Default: just fetch
+    // Default fetch
     return fetch(request);
   }
 };
