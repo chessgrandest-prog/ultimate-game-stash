@@ -28,13 +28,15 @@ async function loadGames(page = 1) {
     let data;
     try {
       data = JSON.parse(text);
-      // Handle both paginated object and raw array fallback
+      // Handle raw array fallback (maintaining search and pagination functionality)
       if (Array.isArray(data)) {
-        const page = parseInt(new URLSearchParams(window.location.search).get("page") || "1");
-        const limit = 50;
+        let filtered = data;
+        if (search) {
+          filtered = filtered.filter(g => g.title.toLowerCase().includes(search.toLowerCase()));
+        }
         data = {
-          games: data.slice((page - 1) * limit, page * limit),
-          total: data.length,
+          games: filtered.slice((page - 1) * limit, page * limit),
+          total: filtered.length,
           page: page
         };
       }

@@ -6,8 +6,10 @@ export default {
     try {
       // 1️⃣ Serve games+img.json with pagination and favorites
       if (path === "/games+img.json") {
-        // Fetch the raw asset
-        const res = await env.ASSETS.fetch(request);
+        // Fetch the raw asset without query params
+        const assetUrl = new URL(request.url);
+        assetUrl.search = ""; 
+        const res = await env.ASSETS.fetch(new Request(assetUrl));
         if (!res.ok) return res;
         
         const text = await res.text();
