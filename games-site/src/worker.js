@@ -98,11 +98,12 @@ export default {
         const contentType = headers.get("Content-Type") || "";
 
         // Determine correct Content-Type based on extension first, then fallback to original
-        if (targetUrl.endsWith(".js") || targetUrl.includes(".js?")) {
-          headers.set("Content-Type", "application/javascript");
-        } else if (targetUrl.endsWith(".css") || targetUrl.includes(".css?")) {
-          headers.set("Content-Type", "text/css");
-        } else if (targetUrl.endsWith(".html") || targetUrl.endsWith(".htm") || contentType.includes("text/plain")) {
+        const lowerUrl = targetUrl.toLowerCase();
+        if (lowerUrl.endsWith(".js") || lowerUrl.includes(".js?") || lowerUrl.includes(".js#") || lowerUrl.endsWith("/js")) {
+          headers.set("Content-Type", "application/javascript; charset=UTF-8");
+        } else if (lowerUrl.endsWith(".css") || lowerUrl.includes(".css?") || lowerUrl.includes(".css#")) {
+          headers.set("Content-Type", "text/css; charset=UTF-8");
+        } else if (lowerUrl.endsWith(".html") || lowerUrl.endsWith(".htm") || contentType.includes("text/plain")) {
           headers.set("Content-Type", "text/html; charset=UTF-8");
         }
 
@@ -114,7 +115,8 @@ export default {
         // If it's HTML, rewrite relative URLs to use our proxy
         if (headers.get("Content-Type").includes("text/html")) {
           let html = await res.text();
-          const baseUrl = targetUrl.substring(0, targetUrl.lastIndexOf("/") + 1);
+          // Use encodeURI on baseUrl to handle spaces correctly
+          const baseUrl = encodeURI(targetUrl.substring(0, targetUrl.lastIndexOf("/") + 1));
           
           // Inject a base tag and helper script
           const proxyScript = `
