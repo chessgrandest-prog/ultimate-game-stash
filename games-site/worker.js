@@ -14,8 +14,9 @@ const addWasmHeaders = (res) => {
 };
 
 const REPO_RAW_BASE = 'https://raw.githubusercontent.com/chessgrandest-prog/ultimate-game-stash/main/games-site';
+const GAMES_JSON_URL = `${REPO_RAW_BASE}/games+img.json`;
 
-// List of Terraria static files relative to the repo
+// Full list of Terraria files
 const TERRARIA_FILES = [
   'index.html','AndyBold.ttf','app.ico','backdrop.png','logo.png','package-lock.json','package.json','sw.js','_headers',
   'assets/index.css','assets/index.js',
@@ -56,7 +57,6 @@ const TERRARIA_FILES = [
   '_framework/terraria.htgijktbe2.dll'
 ];
 
-// Determine MIME type
 function getContentType(path) {
   if (path.endsWith('.wasm')) return 'application/wasm';
   if (path.endsWith('.js')) return 'application/javascript';
@@ -70,7 +70,6 @@ function getContentType(path) {
   return 'application/octet-stream';
 }
 
-// Fetch a file from GitHub raw
 async function fetchFile(path) {
   const url = `${REPO_RAW_BASE}/${path}`;
   const res = await fetch(url);
@@ -87,31 +86,88 @@ export default {
     const url = new URL(request.url);
     let path = url.pathname.replace(/^\/+/, '');
 
-    // Serve Terraria files
-    if (path.startsWith('terraria/')) {
-      path = path.replace(/^terraria\//, '');
-      if (!TERRARIA_FILES.includes(path)) return new Response('File not found', { status: 404 });
+    // Serve /games+img.json with search, pagination, favorites
+    if (path === 'games+img.json') {
       try {
-        const file = await fetchFile(`terraria/${path}`);
-        return addWasmHeaders(new Response(file, { headers: { 'Content-Type': getContentType(path) } }));
+        const gamesRes = await fetch(GAMES_JSON_URL);
+        let games = await gamesRes.json();
+        const page = parseInt(url.searchParams.get('page') || '1');
+        const limit = parseInt(url.searchParams.get('limit') || '100');
+        const searchQuery = (url.searchParams.get('search') || '').toLowerCase();
+        const favoritesOnly = url.searchParams.get('favorites') === '1';
+        const favoriteGames = JSON.parse(url.searchParams.get('favList') || '[]');
+
+        if (searchQuery) games = games.filter(g => g.title.toLowerCase().includes(searchQuery));
+        if (favoritesOnly) games = games.filter(g => favoriteGames.includes(g.url));
+
+        const total = games.length;
+        const start = (page - 1) * limit;
+        const paginatedGames = games.slice(start, start + limit);
+
+        return addWasmHeaders(new Response(JSON.stringify({ total, page, limit, games: paginatedGames }), {
+          headers: { 'Content-Type': 'application/json; charset=UTF-8' }
+        }));
       } catch (err) {
-        console.error('[DEBUG] Failed to fetch Terraria file:', err);
-        return new Response('Failed to load Terraria file', { status: 500 });
+        console.error('[DEBUG] Failed to fetch games+img.json', err);
+        return new Response('Error fetching games.json', { status: 500 });
       }
     }
 
-    // Serve root static files
-    if (TERRARIA_FILES.includes(path)) {
+    // Serve /game/:slug pages
+    if (path.startsWith('game/')) {
+      const gameSlug = decodeURIComponent(path.replace(/^game\//, ''));
       try {
-        const file = await fetchFile(path);
-        return addWasmHeaders(new Response(file, { headers: { 'Content-Type': getContentType(path) } }));
+        const gamesRes = await fetch(GAMES_JSON_URL);
+        const games = await gamesRes.json();
+        const normalize = str => str.replace(/\/+$/, '');
+        const game = games.find(g => normalize(g.url) === normalize(gameSlug));
+        if (!game) return new Response('Game not found', { status: 404 });
+
+        // Internal Terraria game
+        if (game.url.startsWith('/terraria/')) {
+          const terrariaPath = game.url.replace(/^\/terraria\//, '');
+          if (!TERRARIA_FILES.includes(terrariaPath)) return new Response('File not found', { status: 404 });
+          const file = await fetchFile(`terraria/${terrariaPath}`);
+          return addWasmHeaders(new Response(file, { headers: { 'Content-Type': getContentType(terrariaPath) } }));
+        }
+
+        // External URL
+        const gameRes = await fetch(game.url);
+        const gameHtml = await gameRes.text();
+        const iframePage = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${game.title}</title>
+<style>html,body{margin:0;padding:0;height:100%}iframe{width:100%;height:100%;border:none}</style>
+</head>
+<body>
+<iframe srcdoc="${escapeHtml(gameHtml)}"></iframe>
+</body>
+</html>`;
+        return addWasmHeaders(new Response(iframePage, { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }));
       } catch (err) {
-        console.error('[DEBUG] Failed to fetch root file:', err);
+        console.error('[DEBUG] Failed to fetch game page', err);
+        return new Response('Failed to load game.', { status: 500 });
+      }
+    }
+
+    // Serve root/Terraria files
+    if (TERRARIA_FILES.includes(path) || path.startsWith('terraria/')) {
+      let filePath = path.startsWith('terraria/') ? path : `terraria/${path}`;
+      if (!TERRARIA_FILES.includes(filePath.replace(/^terraria\//, ''))) {
         return new Response('File not found', { status: 404 });
       }
+      try {
+        const file = await fetchFile(filePath);
+        return addWasmHeaders(new Response(file, { headers: { 'Content-Type': getContentType(filePath) } }));
+      } catch (err) {
+        console.error('[DEBUG] Failed to fetch static file:', filePath, err);
+        return new Response('Failed to load file.', { status: 500 });
+      }
     }
 
-    // Default fallback
     return new Response('Not Found', { status: 404 });
   }
 };
