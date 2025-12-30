@@ -76,15 +76,19 @@ function toggleFavorite(gameUrl) {
   renderPage();
 }
 
-// Render a game card
+// Generate safe /game/ link
+function getGameLink(game) {
+  return `/game/${encodeURIComponent(game.url)}`;
+}
+
+// Render a single game card
 function renderCard(game) {
-  const gamePath = encodeURIComponent(game.url.split('/').pop());
   const thumbnail = game.image || DEFAULT_THUMBNAIL;
   const isFav = favoriteGames.includes(game.url);
 
   return `
     <div class="game-card">
-      <a href="/game/${gamePath}" target="_blank">
+      <a href="${getGameLink(game)}" target="_blank">
         <div class="thumbnail-container">
           <img src="${thumbnail}" alt="${game.title}" loading="lazy"
                onerror="this.src='${DEFAULT_THUMBNAIL}'">
@@ -114,7 +118,7 @@ function renderPage() {
 // Fetch games from Worker paginated endpoint
 async function fetchGames() {
   try {
-    const searchQuery = document.getElementById('search').value;
+    const searchQuery = document.getElementById('search').value.toLowerCase();
     const favFilter = showFavoritesCheckbox.checked ? '1' : '0';
     const favList = JSON.stringify(favoriteGames);
 
@@ -131,7 +135,6 @@ async function fetchGames() {
   }
 }
 
-
 // Pagination handlers
 function nextPage() { currentPage++; fetchGames(); }
 function prevPage() { currentPage--; fetchGames(); }
@@ -140,5 +143,6 @@ function prevPage() { currentPage--; fetchGames(); }
 fetchGames();
 document.getElementById('search').addEventListener('input', () => { currentPage = 1; fetchGames(); });
 </script>
+
 </body>
 </html>
