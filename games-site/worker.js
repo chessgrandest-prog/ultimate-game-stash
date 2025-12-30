@@ -3,6 +3,7 @@ import { unzipSync } from 'fflate';
 const GAMES_JSON_URL = 'https://raw.githubusercontent.com/chessgrandest-prog/ultimate-game-stash/refs/heads/main/games-site/games+img.json';
 const TERRARIA_ZIP_URL = 'https://github.com/chessgrandest-prog/ultimate-game-stash/releases/download/terraria.zip/terraria.zip';
 
+// Escape HTML for iframe srcdoc
 function escapeHtml(str) {
   return str
     .replace(/&/g, '&amp;')
@@ -13,7 +14,7 @@ function escapeHtml(str) {
     .replace(/`/g, '&#96;');
 }
 
-// Add COEP / COOP headers for WASM
+// Add COEP / COOP headers
 const addWasmHeaders = (res) => {
   res.headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
   res.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
@@ -65,18 +66,19 @@ export default {
           games: paginatedGames
         }), { headers: { 'Content-Type': 'application/json; charset=UTF-8' } }));
 
-      } catch {
+      } catch (err) {
+        console.error(err);
         return new Response('Error fetching games.json', { status: 500 });
       }
     }
 
-    // 🚀 Serve Terraria from cached ZIP
+    // Serve Terraria from cached ZIP
     if (url.pathname.startsWith('/terraria/')) {
       try {
         let filePath = url.pathname.replace('/terraria/', '');
         if (!filePath || filePath === '') filePath = 'index.html';
 
-        // Fetch and cache ZIP once per Worker instance
+        // Fetch and cache ZIP once
         if (!cachedZip) {
           const zipRes = await fetch(TERRARIA_ZIP_URL);
           if (!zipRes.ok) return new Response('Failed to fetch Terraria ZIP', { status: 500 });
@@ -111,7 +113,10 @@ export default {
         const gamesRes = await fetch(GAMES_JSON_URL);
         const games = await gamesRes.json();
 
-        const game = games.find(g => g.url.endsWith(gameFile) || g.url === gameFile);
+        // Normalize URLs (remove trailing slashes)
+        const normalize = str => str.replace(/\/+$/, '');
+        const game = games.find(g => normalize(g.url) === normalize(gameFile));
+
         if (!game) return new Response('Game not found', { status: 404 });
 
         // GitHub Pages iframe
@@ -148,12 +153,13 @@ export default {
 </html>`;
         return addWasmHeaders(new Response(iframePage, { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }));
 
-      } catch {
+      } catch (err) {
+        console.error(err);
         return new Response('Failed to load game.', { status: 500 });
       }
     }
 
-    // Default fetch
+    // Default fallback
     return fetch(request);
   }
 };
