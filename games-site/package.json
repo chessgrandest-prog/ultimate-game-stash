@@ -2,10 +2,12 @@
   "name": "games-site",
   "version": "1.0.0",
   "type": "module",
-  "devDependencies": {
-    "@cloudflare/wrangler": "^2.0.0"
-  },
   "scripts": {
     "deploy": "wrangler publish"
-  }
+  },
+  "description": "",
+  "main": "update-images.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }
