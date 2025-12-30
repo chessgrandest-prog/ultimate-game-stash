@@ -3,11 +3,14 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "deploy": "wrangler publish"
+    "deploy": "wrangler deploy"
   },
   "description": "",
   "main": "update-images.js",
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "fflate": "^0.8.2"
+  }
 }
