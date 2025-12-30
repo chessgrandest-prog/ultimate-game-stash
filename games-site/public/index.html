@@ -28,6 +28,16 @@ async function loadGames(page = 1) {
     let data;
     try {
       data = JSON.parse(text);
+      // Handle both paginated object and raw array fallback
+      if (Array.isArray(data)) {
+        const page = parseInt(new URLSearchParams(window.location.search).get("page") || "1");
+        const limit = 50;
+        data = {
+          games: data.slice((page - 1) * limit, page * limit),
+          total: data.length,
+          page: page
+        };
+      }
     } catch (e) {
       console.error("Failed to parse JSON:", text);
       throw e;

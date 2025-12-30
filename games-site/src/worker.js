@@ -6,14 +6,15 @@ export default {
     try {
       // 1️⃣ Serve games+img.json with pagination and favorites
       if (path === "/games+img.json") {
-        const res = await env.ASSETS.fetch(new Request(new URL("/games+img.json", request.url)));
+        // Fetch the raw asset
+        const res = await env.ASSETS.fetch(request);
+        if (!res.ok) return res;
+        
         const text = await res.text();
-
         let games;
         try {
           games = JSON.parse(text);
         } catch (err) {
-          console.error("Failed parsing JSON from games+img.json:", text);
           return new Response("Failed to parse games JSON", { status: 500 });
         }
 
@@ -33,7 +34,10 @@ export default {
         const paginatedGames = filtered.slice(start, start + limit);
 
         return new Response(JSON.stringify({ total, page, limit, games: paginatedGames }), {
-          headers: { "Content-Type": "application/json; charset=UTF-8" }
+          headers: { 
+            "Content-Type": "application/json; charset=UTF-8",
+            "X-Worker-Processed": "true" 
+          }
         });
       }
 
