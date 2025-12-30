@@ -60,19 +60,33 @@ export default {
           <html>
             <head>
               <title>Playing: ${gameTitle}</title>
+              <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
               <style>
-                body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #000; font-family: sans-serif; }
-                .nav { height: 40px; background: #1a1a1a; color: white; display: flex; align-items: center; padding: 0 20px; justify-content: space-between; }
-                .nav a { color: #00d1ff; text-decoration: none; font-weight: bold; }
-                iframe { width: 100%; height: calc(100% - 40px); border: none; }
+                body, html { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; background: #000; font-family: sans-serif; }
+                iframe { width: 100%; height: 100%; border: none; display: block; }
+                .overlay-nav { 
+                  position: fixed; top: 10px; left: 10px; z-index: 1000; 
+                  opacity: 0; transition: opacity 0.3s; 
+                }
+                body:hover .overlay-nav { opacity: 1; }
+                .back-btn { 
+                  background: rgba(0,0,0,0.6); color: white; padding: 8px 15px; 
+                  text-decoration: none; border-radius: 5px; font-size: 14px;
+                  border: 1px solid rgba(255,255,255,0.2); backdrop-filter: blur(5px);
+                }
+                .back-btn:hover { background: rgba(0, 209, 255, 0.4); }
               </style>
             </head>
             <body>
-              <div class="nav">
-                <span>${gameTitle}</span>
-                <a href="/">Back to Stash</a>
+              <div class="overlay-nav">
+                <a href="/" class="back-btn">← Back</a>
               </div>
-              <iframe src="${gameUrl}" allow="autoplay; fullscreen" allowfullscreen></iframe>
+              <iframe 
+                src="${gameUrl}" 
+                allow="autoplay; fullscreen; keyboard; gamepad; microphone; camera; midi; clipboard-read; clipboard-write; xr-spatial-tracking" 
+                allowfullscreen 
+                sandbox="allow-forms allow-modals allow-orientation-lock allow-pointer-lock allow-popups allow-popups-to-escape-sandbox allow-presentation allow-same-origin allow-scripts allow-downloads"
+              ></iframe>
             </body>
           </html>
         `;
