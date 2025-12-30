@@ -14,16 +14,23 @@ export default {
   async fetch(request) {
     const url = new URL(request.url);
 
+    // Helper: add COOP / CORP headers for WASM
+    const addWasmHeaders = (res) => {
+      res.headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
+      res.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
+      return res;
+    };
+
     // Serve index.html
     if (url.pathname === '/' || url.pathname === '/index.html') {
       const res = await fetch('https://raw.githubusercontent.com/chessgrandest-prog/ultimate-game-stash/refs/heads/main/games-site/index.html');
-      return new Response(await res.text(), { headers: { 'Content-Type': 'text/html; charset=UTF-8' } });
+      return addWasmHeaders(new Response(await res.text(), { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }));
     }
 
     // Serve style.css
     if (url.pathname === '/style.css') {
       const res = await fetch('https://raw.githubusercontent.com/chessgrandest-prog/ultimate-game-stash/refs/heads/main/games-site/style.css');
-      return new Response(await res.text(), { headers: { 'Content-Type': 'text/css; charset=UTF-8' } });
+      return addWasmHeaders(new Response(await res.text(), { headers: { 'Content-Type': 'text/css; charset=UTF-8' } }));
     }
 
     // Paginated & filtered games
@@ -38,26 +45,19 @@ export default {
         const favoritesOnly = url.searchParams.get('favorites') === '1';
         const favoriteGames = JSON.parse(url.searchParams.get('favList') || '[]');
 
-        // Global filters
-        if (searchQuery) {
-          games = games.filter(g => g.title.toLowerCase().includes(searchQuery));
-        }
-        if (favoritesOnly) {
-          games = games.filter(g => favoriteGames.includes(g.url));
-        }
+        if (searchQuery) games = games.filter(g => g.title.toLowerCase().includes(searchQuery));
+        if (favoritesOnly) games = games.filter(g => favoriteGames.includes(g.url));
 
         const total = games.length;
         const start = (page - 1) * limit;
         const paginatedGames = games.slice(start, start + limit);
 
-        return new Response(JSON.stringify({
+        return addWasmHeaders(new Response(JSON.stringify({
           total,
           page,
           limit,
           games: paginatedGames
-        }), {
-          headers: { 'Content-Type': 'application/json; charset=UTF-8' }
-        });
+        }), { headers: { 'Content-Type': 'application/json; charset=UTF-8' } }));
 
       } catch (err) {
         return new Response('Error fetching games.json', { status: 500 });
@@ -65,22 +65,21 @@ export default {
     }
 
     // Serve individual game pages
-    // Serve individual game pages
-if (url.pathname.startsWith('/game/')) {
-  try {
-    const gameFile = decodeURIComponent(url.pathname.replace('/game/', ''));
-    const gamesRes = await fetch(GAMES_JSON_URL);
-    const games = await gamesRes.json();
+    if (url.pathname.startsWith('/game/')) {
+      try {
+        const gameFile = decodeURIComponent(url.pathname.replace('/game/', ''));
+        const gamesRes = await fetch(GAMES_JSON_URL);
+        const games = await gamesRes.json();
 
-    const game = games.find(g => g.url.endsWith(gameFile) || g.url === gameFile);
-    if (!game) return new Response('Game not found', { status: 404 });
+        const game = games.find(g => g.url.endsWith(gameFile) || g.url === gameFile);
+        if (!game) return new Response('Game not found', { status: 404 });
 
-    // 🚨 WASM / COOP games MUST be top-level
-    if (game.url.startsWith('/terraria/')) {
-      return Response.redirect(new URL(game.url, url.origin), 302);
-    }
+        // WASM / Terraria games: top-level redirect with headers
+        if (game.url.startsWith('/terraria/')) {
+          return addWasmHeaders(Response.redirect(new URL(game.url, url.origin), 302));
+        }
 
-        // Detect GitHub Pages URLs
+        // GitHub Pages iframe
         if (game.url.includes(".github.io")) {
           const iframePage = `<!DOCTYPE html>
 <html lang="en">
@@ -94,10 +93,10 @@ if (url.pathname.startsWith('/game/')) {
 <iframe src="${game.url}" frameborder="0" allowfullscreen></iframe>
 </body>
 </html>`;
-          return new Response(iframePage, { headers: { 'Content-Type': 'text/html; charset=UTF-8' } });
+          return addWasmHeaders(new Response(iframePage, { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }));
         }
 
-        // Otherwise, fetch raw HTML for normal games
+        // Otherwise, fetch raw HTML
         const gameRes = await fetch(game.url);
         const gameHtml = await gameRes.text();
         const iframePage = `<!DOCTYPE html>
@@ -112,7 +111,7 @@ if (url.pathname.startsWith('/game/')) {
 <iframe srcdoc="${escapeHtml(gameHtml)}"></iframe>
 </body>
 </html>`;
-        return new Response(iframePage, { headers: { 'Content-Type': 'text/html; charset=UTF-8' } });
+        return addWasmHeaders(new Response(iframePage, { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }));
 
       } catch {
         return new Response('Failed to load game.', { status: 500 });
