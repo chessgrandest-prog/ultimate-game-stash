@@ -118,9 +118,8 @@ export default {
           const origin = new URL(request.url).origin;
           const baseUrl = encodeURI(targetUrl.substring(0, targetUrl.lastIndexOf("/") + 1));
           
-          // Inject a base tag and helper script
+          // Inject helper script
           const proxyScript = `
-<base href="${baseUrl}">
 <script>
 (function() {
   const workerOrigin = "${origin}";
@@ -129,23 +128,29 @@ export default {
 
   function wrapUrl(url) {
     if (!url || typeof url !== 'string') return url;
-    // Check if it's already proxied (handle both relative and absolute proxy URLs)
-    if (url.startsWith(proxyPrefix) || url.startsWith('/proxy/') || url.includes('/proxy/http')) return url;
     
-    // If it's a relative URL resolving against a proxy URL, strip the proxy prefix from base if needed
-    // However, baseUrl here is the original GitHub URL, so it's fine.
+    // If it's already a full proxy URL on our origin, leave it
+    if (url.startsWith(proxyPrefix)) return url;
+    
+    // If it's a relative /proxy/ path, make it absolute
+    if (url.startsWith('/proxy/')) return workerOrigin + url;
+
+    // Avoid double proxying if it somehow resolved to GitHub/proxy/...
+    if (url.includes('/proxy/http')) {
+       const actualUrl = url.split('/proxy/')[1];
+       if (actualUrl) return proxyPrefix + actualUrl;
+       return url;
+    }
+    
+    if (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('#')) return url;
     
     let absoluteUrl;
     try {
-      // If the URL is already absolute and contains 'proxy', return it
-      if (url.includes(workerOrigin + '/proxy/')) return url;
-      
       absoluteUrl = new URL(url, baseUrl).href;
     } catch (e) {
       return url;
     }
 
-    // Don't proxy if it's already on our worker origin
     if (absoluteUrl.startsWith(workerOrigin)) return url;
     return proxyPrefix + absoluteUrl;
   }
