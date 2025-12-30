@@ -3,146 +3,98 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Game Library</title>
+<title>Ultimate Game Stash</title>
 <link rel="stylesheet" href="/style.css">
+<style>
+  body { font-family: sans-serif; margin: 0; padding: 0; background: #f4f4f4; }
+  header { background: #222; color: white; padding: 1em; text-align: center; }
+  .controls { margin-top: 0.5em; }
+  input[type="text"] { padding: 0.5em; width: 200px; }
+  .game-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1em; padding: 1em; }
+  .game-card { background: white; padding: 0.5em; border-radius: 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; }
+  .game-card img { width: 100%; height: 100px; object-fit: cover; border-radius: 4px; }
+  .game-card a { text-decoration: none; color: #222; font-weight: bold; display: block; margin-top: 0.5em; }
+  #pagination { text-align: center; margin: 1em; }
+  #pagination button { padding: 0.5em 1em; margin: 0 0.5em; border: none; border-radius: 4px; background: #222; color: white; cursor: pointer; }
+  #pagination button:disabled { background: #888; cursor: default; }
+</style>
 </head>
 <body>
 <header>
-  <h1>Game Library</h1>
+  <h1>Ultimate Game Stash</h1>
   <div class="controls">
     <input id="search" type="text" placeholder="Search games...">
-    <button id="themeToggle">🌙 Toggle Theme</button>
-    <label class="favorites-toggle">
-      <input type="checkbox" id="showFavorites">
-      Show Favorites
-    </label>
   </div>
 </header>
 
-<main>
-  <section id="featuredSection">
-    <h2>Featured Games</h2>
-    <div id="featuredGrid" class="games-grid"></div>
-  </section>
-
-  <section id="allGamesSection">
-    <h2>All Games</h2>
-    <div id="gamesGrid" class="games-grid"></div>
-
-    <!-- Pagination controls -->
-    <div style="text-align:center; margin: 10px;">
-      <button id="prevPage" onclick="prevPage()">Previous</button>
-      <span id="pageInfo"></span>
-      <button id="nextPage" onclick="nextPage()">Next</button>
-    </div>
-  </section>
-</main>
-
-<footer>
-  <p id="totalGames"></p>
-</footer>
+<div class="game-grid" id="gameGrid"></div>
+<div id="pagination"></div>
 
 <script>
-const DEFAULT_THUMBNAIL = 'https://via.placeholder.com/200x120?text=Game';
-const FAVORITES_KEY = 'favoriteGames';
-let favoriteGames = JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
+const gameGrid = document.getElementById('gameGrid');
+const searchInput = document.getElementById('search');
 
-// Theme toggle
-let darkMode = false;
-const body = document.body;
-document.getElementById('themeToggle').addEventListener('click', () => {
-  darkMode = !darkMode;
-  body.classList.toggle('dark', darkMode);
-});
-
-// Favorites filter
-const showFavoritesCheckbox = document.getElementById('showFavorites');
-showFavoritesCheckbox.addEventListener('change', () => { currentPage = 1; fetchGames(); });
-
-// Pagination
-const GAMES_PER_PAGE = 100;
+let allGames = [];
 let currentPage = 1;
-let totalGames = 0;
-let currentGames = [];
+const limit = 50; // games per page
+let totalPages = 1;
+let debounceTimer = null;
 
-// Toggle favorite
-function toggleFavorite(gameUrl) {
-  if (favoriteGames.includes(gameUrl)) {
-    favoriteGames = favoriteGames.filter(url => url !== gameUrl);
-  } else {
-    favoriteGames.push(gameUrl);
+// Fetch games from Worker with pagination
+async function loadGames(page = 1, search = '') {
+  try {
+    const res = await fetch(`/games+img.json?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`);
+    const data = await res.json();
+    if (!data || !data.games) throw new Error('Invalid response');
+    
+    allGames = data.games;
+    totalPages = Math.ceil(data.total / limit);
+    currentPage = data.page;
+
+    renderGames(allGames);
+    renderPagination();
+  } catch (err) {
+    console.error('Failed to load games:', err);
+    gameGrid.innerHTML = '<p>Error loading games.</p>';
+    document.getElementById('pagination').innerHTML = '';
   }
-  localStorage.setItem(FAVORITES_KEY, JSON.stringify(favoriteGames));
-  renderPage();
 }
 
-// Generate safe /game/ link
-function getGameLink(game) {
-  return `/game/${encodeURIComponent(game.url)}`;
-}
-
-// Render a single game card
-function renderCard(game) {
-  const thumbnail = game.image || DEFAULT_THUMBNAIL;
-  const isFav = favoriteGames.includes(game.url);
-
-  return `
+// Render games in grid
+function renderGames(games) {
+  if (!games || games.length === 0) {
+    gameGrid.innerHTML = '<p>No games found.</p>';
+    return;
+  }
+  gameGrid.innerHTML = games.map(g => `
     <div class="game-card">
-      <a href="${getGameLink(game)}" target="_blank">
-        <div class="thumbnail-container">
-          <img src="${thumbnail}" alt="${game.title}" loading="lazy"
-               onerror="this.src='${DEFAULT_THUMBNAIL}'">
-        </div>
-        <div class="game-title">${game.title}</div>
-      </a>
-      <button class="favorite-btn" onclick="toggleFavorite('${game.url}')">
-        ${isFav ? '⭐' : '☆'}
-      </button>
+      <img src="${g.img || '/images/_.jpg'}" alt="${g.title}">
+      <a href="${g.url}">${g.title}</a>
     </div>
+  `).join('');
+}
+
+// Render pagination controls
+function renderPagination() {
+  let paginationDiv = document.getElementById('pagination');
+
+  paginationDiv.innerHTML = `
+    <button ${currentPage === 1 ? 'disabled' : ''} onclick="loadGames(${currentPage - 1}, '${searchInput.value}')">Prev</button>
+    Page ${currentPage} of ${totalPages}
+    <button ${currentPage === totalPages ? 'disabled' : ''} onclick="loadGames(${currentPage + 1}, '${searchInput.value}')">Next</button>
   `;
 }
 
-// Render the current page
-function renderPage() {
-  document.getElementById('gamesGrid').innerHTML = currentGames.map(renderCard).join('');
-  document.getElementById('featuredGrid').innerHTML = currentGames.slice(0, 5).map(renderCard).join('');
+// Search debounce
+searchInput.addEventListener('input', () => {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => {
+    loadGames(1, searchInput.value);
+  }, 300);
+});
 
-  document.getElementById('totalGames').textContent =
-    `Showing page ${currentPage} of ${Math.ceil(totalGames / GAMES_PER_PAGE)} (Total games: ${totalGames})`;
-
-  document.getElementById('pageInfo').textContent = `Page ${currentPage}`;
-  document.getElementById('prevPage').disabled = currentPage === 1;
-  document.getElementById('nextPage').disabled = currentPage * GAMES_PER_PAGE >= totalGames;
-}
-
-// Fetch games from Worker paginated endpoint
-async function fetchGames() {
-  try {
-    const searchQuery = document.getElementById('search').value.toLowerCase();
-    const favFilter = showFavoritesCheckbox.checked ? '1' : '0';
-    const favList = JSON.stringify(favoriteGames);
-
-    const res = await fetch(`/games+img.json?page=${currentPage}&limit=${GAMES_PER_PAGE}&search=${encodeURIComponent(searchQuery)}&favorites=${favFilter}&favList=${encodeURIComponent(favList)}`);
-    const data = await res.json();
-
-    totalGames = data.total;
-    currentGames = data.games;
-
-    renderPage();
-  } catch (err) {
-    console.error(err);
-    document.getElementById('totalGames').textContent = 'Failed to load games.';
-  }
-}
-
-// Pagination handlers
-function nextPage() { currentPage++; fetchGames(); }
-function prevPage() { currentPage--; fetchGames(); }
-
-// Initialize
-fetchGames();
-document.getElementById('search').addEventListener('input', () => { currentPage = 1; fetchGames(); });
+// Initial load
+loadGames();
 </script>
-
 </body>
 </html>

@@ -1,3 +1,7 @@
-name = "terraria-proxy"
-main = "worker.js"
-compatibility_date = "2024-12-01"
+name = "ultimate-game-stash"
+main = "src/worker.js"
+compatibility_date = "2025-12-30"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
