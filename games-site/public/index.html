@@ -34,24 +34,23 @@
 const gameGrid = document.getElementById('gameGrid');
 const searchInput = document.getElementById('search');
 
-let allGames = [];
-let currentPage = 1;
-const limit = 50; // games per page
 let totalPages = 1;
+let currentPage = 1;
+const limit = 50;
 let debounceTimer = null;
 
-// Fetch games from Worker with pagination
+// Fetch games with pagination and search
 async function loadGames(page = 1, search = '') {
   try {
     const res = await fetch(`/games+img.json?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`);
     const data = await res.json();
-    if (!data || !data.games) throw new Error('Invalid response');
-    
-    allGames = data.games;
-    totalPages = Math.ceil(data.total / limit);
-    currentPage = data.page;
 
-    renderGames(allGames);
+    if (!data || !Array.isArray(data.games)) throw new Error('Invalid response');
+
+    currentPage = Math.min(Math.max(1, data.page), Math.ceil(data.total / limit));
+    totalPages = Math.max(1, Math.ceil(data.total / limit));
+
+    renderGames(data.games);
     renderPagination();
   } catch (err) {
     console.error('Failed to load games:', err);
@@ -60,7 +59,7 @@ async function loadGames(page = 1, search = '') {
   }
 }
 
-// Render games in grid
+// Render games grid
 function renderGames(games) {
   if (!games || games.length === 0) {
     gameGrid.innerHTML = '<p>No games found.</p>';
@@ -74,23 +73,20 @@ function renderGames(games) {
   `).join('');
 }
 
-// Render pagination controls
+// Render pagination dynamically
 function renderPagination() {
-  let paginationDiv = document.getElementById('pagination');
-
+  const paginationDiv = document.getElementById('pagination');
   paginationDiv.innerHTML = `
-    <button ${currentPage === 1 ? 'disabled' : ''} onclick="loadGames(${currentPage - 1}, '${searchInput.value}')">Prev</button>
+    <button ${currentPage <= 1 ? 'disabled' : ''} onclick="loadGames(${currentPage - 1}, '${searchInput.value}')">Prev</button>
     Page ${currentPage} of ${totalPages}
-    <button ${currentPage === totalPages ? 'disabled' : ''} onclick="loadGames(${currentPage + 1}, '${searchInput.value}')">Next</button>
+    <button ${currentPage >= totalPages ? 'disabled' : ''} onclick="loadGames(${currentPage + 1}, '${searchInput.value}')">Next</button>
   `;
 }
 
-// Search debounce
+// Debounce search input
 searchInput.addEventListener('input', () => {
   clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => {
-    loadGames(1, searchInput.value);
-  }, 300);
+  debounceTimer = setTimeout(() => loadGames(1, searchInput.value), 300);
 });
 
 // Initial load
