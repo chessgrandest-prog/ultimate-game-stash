@@ -93,7 +93,7 @@ export default {
 
         // Auto-fix for known broken 2048 assets
         if (targetUrl.includes("cdn.jsdelivr.net/gh/qollaaa/j") && targetUrl.includes("/Games/2048/")) {
-          targetUrl = targetUrl.replace(/gh\/qollaaa\/j@[^\/]+\/Games\/2048\//i, "gh/gabrielecirulli/2048/");
+          targetUrl = targetUrl.replace(/gh\/qollaaa\/j@[^\/]+\/Games\/2048\//i, "gh/ovolve/2048-AI/");
           console.log(`Auto-mapped broken asset to: ${targetUrl}`);
         }
 
