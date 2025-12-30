@@ -21,10 +21,11 @@ const addWasmHeaders = (res) => {
 
 let cachedZip = null;
 
+// Load and cache ZIP
 async function loadTerrariaZip() {
   if (!cachedZip) {
     const zipRes = await fetch(TERRARIA_ZIP_URL);
-    if (!zipRes.ok) throw new Error('Failed to fetch Terraria ZIP');
+    if (!zipRes.ok) throw new Error(`Failed to fetch Terraria ZIP: ${zipRes.status}`);
     const buffer = new Uint8Array(await zipRes.arrayBuffer());
     const zipFiles = unzipSync(buffer);
     cachedZip = {};
@@ -35,14 +36,14 @@ async function loadTerrariaZip() {
   }
 }
 
-// Map requested path to ZIP content (folder-aware)
+// Lookup file in ZIP (folder-aware)
 function getZipFile(requestPath) {
   const cleanPath = requestPath.replace(/^\/+|\/+$/g, '');
   let content = cachedZip[cleanPath];
   if (!content) {
     const lowerPath = cleanPath.toLowerCase();
     for (const zipPath of Object.keys(cachedZip)) {
-      if (zipPath.toLowerCase().endsWith('/' + lowerPath) || zipPath.toLowerCase() === lowerPath) {
+      if (zipPath.toLowerCase() === lowerPath || zipPath.toLowerCase().endsWith('/' + lowerPath)) {
         content = cachedZip[zipPath];
         break;
       }
@@ -66,19 +67,19 @@ export default {
   async fetch(request) {
     const url = new URL(request.url);
 
-    // Serve index.html
+    // Serve main index.html
     if (url.pathname === '/' || url.pathname === '/index.html') {
       const res = await fetch('https://raw.githubusercontent.com/chessgrandest-prog/ultimate-game-stash/refs/heads/main/games-site/index.html');
       return addWasmHeaders(new Response(await res.text(), { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }));
     }
 
-    // Serve style.css
+    // Serve CSS
     if (url.pathname === '/style.css') {
       const res = await fetch('https://raw.githubusercontent.com/chessgrandest-prog/ultimate-game-stash/refs/heads/main/games-site/style.css');
       return addWasmHeaders(new Response(await res.text(), { headers: { 'Content-Type': 'text/css; charset=UTF-8' } }));
     }
 
-    // Paginated & filtered games JSON
+    // Games JSON
     if (url.pathname === '/games+img.json') {
       try {
         const gamesRes = await fetch(GAMES_JSON_URL);
@@ -110,16 +111,23 @@ export default {
       }
     }
 
-    // Serve Terraria + all subpaths
+    // Serve Terraria and subpaths
     if (url.pathname.startsWith('/terraria/')) {
       try {
+        let debugMsg = '';
+        debugMsg += `Request path: ${url.pathname}\n`;
+
         await loadTerrariaZip();
 
         let filePath = url.pathname.replace('/terraria/', '');
         if (!filePath) filePath = 'index.html';
+        debugMsg += `Normalized path: ${filePath}\n`;
 
         const contentBuffer = getZipFile(filePath);
-        if (!contentBuffer) return new Response('File not found in ZIP', { status: 404 });
+        if (!contentBuffer) {
+          debugMsg += `Available ZIP files: ${Object.keys(cachedZip).join(', ')}\n`;
+          return new Response(`File not found in ZIP\n${debugMsg}`, { status: 404 });
+        }
 
         const isText = filePath.endsWith('.html') || filePath.endsWith('.js') || filePath.endsWith('.css');
         return addWasmHeaders(new Response(isText ? new TextDecoder().decode(contentBuffer) : contentBuffer, {
@@ -128,11 +136,11 @@ export default {
 
       } catch (err) {
         console.error('Terraria load error:', err);
-        return new Response('Failed to load Terraria.', { status: 500 });
+        return new Response(`Failed to load Terraria\nError: ${err}`, { status: 500 });
       }
     }
 
-    // Serve individual game pages
+    // Individual game pages
     if (url.pathname.startsWith('/game/')) {
       try {
         const gameFile = decodeURIComponent(url.pathname.replace('/game/', ''));
@@ -141,7 +149,6 @@ export default {
 
         const normalize = str => str.replace(/\/+$/, '');
         const game = games.find(g => normalize(g.url) === normalize(gameFile));
-
         if (!game) return new Response('Game not found', { status: 404 });
 
         if (game.url.includes(".github.io")) {
@@ -178,7 +185,7 @@ export default {
 
       } catch (err) {
         console.error('Failed to load game:', err);
-        return new Response('Failed to load game.', { status: 500 });
+        return new Response(`Failed to load game\nError: ${err}`, { status: 500 });
       }
     }
 
