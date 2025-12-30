@@ -21,6 +21,7 @@ const addWasmHeaders = (res) => {
 
 let cachedZip = null;
 
+// Load ZIP once
 async function loadTerrariaZip() {
   if (!cachedZip) {
     console.log('[DEBUG] Fetching Terraria ZIP...');
@@ -36,22 +37,19 @@ async function loadTerrariaZip() {
   }
 }
 
+// Lookup file in ZIP, case-insensitive
 function getZipFile(requestPath) {
   const cleanPath = requestPath.replace(/^\/+|\/+$/g, '');
-  let content = cachedZip[cleanPath];
-  if (!content) {
-    const lowerPath = cleanPath.toLowerCase();
-    for (const zipPath of Object.keys(cachedZip)) {
-      if (zipPath.toLowerCase().endsWith('/' + lowerPath) || zipPath.toLowerCase() === lowerPath) {
-        content = cachedZip[zipPath];
-        break;
-      }
-    }
+  if (cachedZip[cleanPath]) return cachedZip[cleanPath];
+  const lowerPath = cleanPath.toLowerCase();
+  for (const zipPath of Object.keys(cachedZip)) {
+    if (zipPath.toLowerCase().endsWith(lowerPath)) return cachedZip[zipPath];
   }
-  if (!content) console.log('[DEBUG] File not found in ZIP:', cleanPath);
-  return content;
+  console.log('[DEBUG] File not found in ZIP:', cleanPath);
+  return null;
 }
 
+// Determine MIME type
 function getContentType(filePath) {
   if (filePath.endsWith('.wasm')) return 'application/wasm';
   if (filePath.endsWith('.js')) return 'application/javascript';
@@ -59,13 +57,16 @@ function getContentType(filePath) {
   if (filePath.endsWith('.png')) return 'image/png';
   if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) return 'image/jpeg';
   if (filePath.endsWith('.ico')) return 'image/x-icon';
+  if (filePath.endsWith('.ttf')) return 'font/ttf';
   if (filePath.endsWith('.html')) return 'text/html';
   return 'application/octet-stream';
 }
 
+// Fetch file directly from repo
 async function fetchRepoFile(path) {
   try {
-    const res = await fetch(REPO_BASE_URL + path);
+    const url = REPO_BASE_URL + path;
+    const res = await fetch(url);
     if (!res.ok) return null;
     if (path.endsWith('.html') || path.endsWith('.js') || path.endsWith('.css')) {
       return await res.text();
@@ -83,61 +84,49 @@ export default {
     const url = new URL(request.url);
     console.log('[DEBUG] Incoming request:', url.pathname);
 
-    // Serve index.html
-    if (url.pathname === '/' || url.pathname === '/index.html') {
-      const html = await fetchRepoFile('/index.html');
-      if (!html) return new Response('index.html not found', { status: 404 });
-      return addWasmHeaders(new Response(html, { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }));
+    // Root files
+    const rootFiles = ['index.html', 'style.css', 'index.js', 'app.ico', 'AndyBold.ttf'];
+    if (rootFiles.includes(url.pathname.replace(/^\/+/g, ''))) {
+      const file = await fetchRepoFile('/' + url.pathname.replace(/^\/+/g, ''));
+      if (!file) return new Response('File not found', { status: 404 });
+      const contentType = getContentType(url.pathname);
+      return addWasmHeaders(new Response(file, { headers: { 'Content-Type': contentType } }));
     }
 
-    // Serve style.css
-    if (url.pathname === '/style.css') {
-      const css = await fetchRepoFile('/style.css');
-      if (!css) return new Response('style.css not found', { status: 404 });
-      return addWasmHeaders(new Response(css, { headers: { 'Content-Type': 'text/css; charset=UTF-8' } }));
-    }
-
-    // Serve games+img.json
+    // Games JSON
     if (url.pathname === '/games+img.json') {
       try {
         const gamesRes = await fetch(GAMES_JSON_URL);
         let games = await gamesRes.json();
-
         const page = parseInt(url.searchParams.get('page') || '1');
         const limit = parseInt(url.searchParams.get('limit') || '100');
         const searchQuery = (url.searchParams.get('search') || '').toLowerCase();
         const favoritesOnly = url.searchParams.get('favorites') === '1';
         const favoriteGames = JSON.parse(url.searchParams.get('favList') || '[]');
-
         if (searchQuery) games = games.filter(g => g.title.toLowerCase().includes(searchQuery));
         if (favoritesOnly) games = games.filter(g => favoriteGames.includes(g.url));
-
         const total = games.length;
         const start = (page - 1) * limit;
         const paginatedGames = games.slice(start, start + limit);
-
-        return addWasmHeaders(new Response(JSON.stringify({
-          total,
-          page,
-          limit,
-          games: paginatedGames
-        }), { headers: { 'Content-Type': 'application/json; charset=UTF-8' } }));
+        return addWasmHeaders(new Response(JSON.stringify({ total, page, limit, games: paginatedGames }), {
+          headers: { 'Content-Type': 'application/json; charset=UTF-8' }
+        }));
       } catch (err) {
         console.error('[DEBUG] Error fetching games.json:', err);
         return new Response('Error fetching games.json', { status: 500 });
       }
     }
 
-    // Serve Terraria ZIP files
+    // Terraria ZIP
     if (url.pathname.startsWith('/terraria/')) {
       try {
         await loadTerrariaZip();
-        let filePath = url.pathname.replace('/terraria/', '') || 'index.html';
-        const content = getZipFile(filePath);
+        const path = url.pathname.replace('/terraria/', '') || 'index.html';
+        const content = getZipFile(path);
         if (!content) return new Response('File not found in ZIP', { status: 404 });
-        const isText = filePath.endsWith('.html') || filePath.endsWith('.js') || filePath.endsWith('.css');
+        const isText = path.endsWith('.html') || path.endsWith('.js') || path.endsWith('.css');
         return addWasmHeaders(new Response(isText ? new TextDecoder().decode(content) : content, {
-          headers: { 'Content-Type': getContentType(filePath) }
+          headers: { 'Content-Type': getContentType(path) }
         }));
       } catch (err) {
         console.error('[DEBUG] Terraria load error:', err);
@@ -145,7 +134,7 @@ export default {
       }
     }
 
-    // Serve individual game pages
+    // Individual game pages
     if (url.pathname.startsWith('/game/')) {
       try {
         const gameFile = decodeURIComponent(url.pathname.replace('/game/', ''));
@@ -154,31 +143,20 @@ export default {
         const normalize = str => str.replace(/\/+$/, '');
         const game = games.find(g => normalize(g.url) === normalize(gameFile));
         if (!game) return new Response('Game not found', { status: 404 });
-
         console.log('[DEBUG] Serving game:', game.title, 'URL:', game.url);
 
-        // Internal paths (like /terraria/)
-        if (game.url.startsWith('/')) {
-          if (game.url.startsWith('/terraria/')) {
-            await loadTerrariaZip();
-            const path = game.url.replace(/^\/terraria\//, '');
-            const content = getZipFile(path || 'index.html');
-            if (!content) return new Response('Internal game file not found in ZIP', { status: 404 });
-            const isText = path.endsWith('.html') || path.endsWith('.js') || path.endsWith('.css');
-            return addWasmHeaders(new Response(isText ? new TextDecoder().decode(content) : content, {
-              headers: { 'Content-Type': getContentType(path) }
-            }));
-          }
-
-          // Other internal files from repo
-          const internalFile = await fetchRepoFile(game.url);
-          if (!internalFile) return new Response('Internal game file not found', { status: 404 });
-          const contentType = getContentType(game.url);
-          const body = typeof internalFile === 'string' ? internalFile : internalFile;
-          return addWasmHeaders(new Response(body, { headers: { 'Content-Type': contentType } }));
+        if (game.url.startsWith('/terraria/')) {
+          await loadTerrariaZip();
+          const path = game.url.replace(/^\/terraria\//, '');
+          const content = getZipFile(path || 'index.html');
+          if (!content) return new Response('Internal game file not found in ZIP', { status: 404 });
+          const isText = path.endsWith('.html') || path.endsWith('.js') || path.endsWith('.css');
+          return addWasmHeaders(new Response(isText ? new TextDecoder().decode(content) : content, {
+            headers: { 'Content-Type': getContentType(path) }
+          }));
         }
 
-        // External URLs
+        // External games
         const gameRes = await fetch(game.url);
         const gameHtml = await gameRes.text();
         const iframePage = `<!DOCTYPE html>
@@ -194,22 +172,13 @@ export default {
 </body>
 </html>`;
         return addWasmHeaders(new Response(iframePage, { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }));
-
       } catch (err) {
         console.error('[DEBUG] Failed to load game:', err);
         return new Response('Failed to load game.', { status: 500 });
       }
     }
 
-    // Generic static files (js, ico, png, jpg)
-    if (url.pathname.match(/\.(js|ico|png|jpg|jpeg)$/)) {
-      const file = await fetchRepoFile(url.pathname);
-      if (!file) return new Response('File not found', { status: 404 });
-      const contentType = getContentType(url.pathname);
-      return addWasmHeaders(new Response(file, { headers: { 'Content-Type': contentType } }));
-    }
-
-    // Default fallback
+    // Fallback
     return fetch(request);
   }
 };
