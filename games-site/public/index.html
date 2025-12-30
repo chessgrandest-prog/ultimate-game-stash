@@ -52,15 +52,11 @@ async function loadGames(page = 1) {
     data.games.forEach(g => {
       const a = document.createElement("a");
       a.className = "game-card";
-      a.href = g.url || "#";
-      a.target = "_blank";
-      
-      // Use the image from JSON, with a fallback if missing
-      const imgSrc = g.image || "/images/default-game.png";
-      
+      // Redirect to a local play route that will handle fetching and headers
+      a.href = `/play?url=${encodeURIComponent(g.url)}&title=${encodeURIComponent(g.title)}`;
       a.innerHTML = `
         <div class="thumbnail-container">
-          <img src="${imgSrc}" alt="${g.title}" loading="lazy" onerror="this.src='/images/default-game.png';this.onerror=null;" />
+          <img src="${g.image || ""}" alt="${g.title}" loading="lazy" />
         </div>
         <div class="game-info">
           <div class="game-title">${g.title}</div>

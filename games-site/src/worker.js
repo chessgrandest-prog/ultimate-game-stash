@@ -43,7 +43,45 @@ export default {
         });
       }
 
-      // 2️⃣ Serve static assets
+      // 2️⃣ Game Player Route
+      if (path === "/play") {
+        const gameUrl = url.searchParams.get("url");
+        const gameTitle = url.searchParams.get("title") || "Game";
+        
+        if (!gameUrl) return new Response("Missing game URL", { status: 400 });
+
+        const playerHtml = `
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>Playing: ${gameTitle}</title>
+              <style>
+                body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #000; font-family: sans-serif; }
+                .nav { height: 40px; background: #1a1a1a; color: white; display: flex; align-items: center; padding: 0 20px; justify-content: space-between; }
+                .nav a { color: #00d1ff; text-decoration: none; font-weight: bold; }
+                iframe { width: 100%; height: calc(100% - 40px); border: none; }
+              </style>
+            </head>
+            <body>
+              <div class="nav">
+                <span>${gameTitle}</span>
+                <a href="/">Back to Stash</a>
+              </div>
+              <iframe src="${gameUrl}" allow="autoplay; fullscreen; keyboard" allowfullscreen></iframe>
+            </body>
+          </html>
+        `;
+
+        return new Response(playerHtml, {
+          headers: { 
+            "Content-Type": "text/html; charset=UTF-8",
+            "Cross-Origin-Embedder-Policy": "require-corp",
+            "Cross-Origin-Opener-Policy": "same-origin"
+          }
+        });
+      }
+
+      // 3️⃣ Serve static assets
       const assetResponse = await env.ASSETS.fetch(request);
       if (assetResponse.status !== 404) return assetResponse;
 
