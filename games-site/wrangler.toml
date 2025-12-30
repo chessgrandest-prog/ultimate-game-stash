@@ -1,7 +1,3 @@
-name = "game-site"
-main = "src/worker.js"
+name = "terraria-proxy"
+main = "worker.js"
 compatibility_date = "2024-12-01"
-
-[assets]
-directory = "./public"
-binding = "ASSETS"

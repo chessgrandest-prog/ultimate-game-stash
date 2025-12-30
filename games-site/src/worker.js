@@ -1,28 +1,24 @@
 export default {
-  async fetch(request, env) {
+  async fetch(request) {
     const url = new URL(request.url);
 
-    // Serve static assets first
-    const assetResponse = await env.ASSETS.fetch(request);
+    // Map /terraria/* → GitHub Pages
+    const upstream = "https://chessgrandest-prog.github.io/terraria-wasm1/";
+    const targetUrl = upstream + url.pathname.replace(/^\/terraria/, "");
 
-    // If asset exists, return it
-    if (assetResponse.status !== 404) {
-      // ONLY apply COOP/COEP to Terraria
-      if (url.pathname.startsWith("/terraria/")) {
-        const headers = new Headers(assetResponse.headers);
-        headers.set("Cross-Origin-Embedder-Policy", "require-corp");
-        headers.set("Cross-Origin-Opener-Policy", "same-origin");
+    const upstreamRes = await fetch(targetUrl, {
+      headers: request.headers
+    });
 
-        return new Response(assetResponse.body, {
-          status: assetResponse.status,
-          headers
-        });
-      }
+    const headers = new Headers(upstreamRes.headers);
 
-      return assetResponse;
-    }
+    // REQUIRED for Terraria WASM
+    headers.set("Cross-Origin-Embedder-Policy", "require-corp");
+    headers.set("Cross-Origin-Opener-Policy", "same-origin");
 
-    // Fallback 404
-    return new Response("Not Found", { status: 404 });
+    return new Response(upstreamRes.body, {
+      status: upstreamRes.status,
+      headers
+    });
   }
 };
