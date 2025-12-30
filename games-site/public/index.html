@@ -5,89 +5,68 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ultimate Game Stash</title>
 <link rel="stylesheet" href="/style.css">
-<style>
-  body { font-family: sans-serif; margin: 0; padding: 0; background: #f4f4f4; }
-  header { background: #222; color: white; padding: 1em; text-align: center; }
-  .controls { margin-top: 0.5em; }
-  input[type="text"] { padding: 0.5em; width: 200px; }
-  .game-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1em; padding: 1em; }
-  .game-card { background: white; padding: 0.5em; border-radius: 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; }
-  .game-card img { width: 100%; height: 100px; object-fit: cover; border-radius: 4px; }
-  .game-card a { text-decoration: none; color: #222; font-weight: bold; display: block; margin-top: 0.5em; }
-  #pagination { text-align: center; margin: 1em; }
-  #pagination button { padding: 0.5em 1em; margin: 0 0.5em; border: none; border-radius: 4px; background: #222; color: white; cursor: pointer; }
-  #pagination button:disabled { background: #888; cursor: default; }
-</style>
 </head>
 <body>
 <header>
   <h1>Ultimate Game Stash</h1>
-  <div class="controls">
-    <input id="search" type="text" placeholder="Search games...">
-  </div>
+  <input type="text" id="search" placeholder="Search games..." />
+  <button id="prevPage">Prev</button>
+  <button id="nextPage">Next</button>
+  <span id="pageInfo"></span>
 </header>
-
-<div class="game-grid" id="gameGrid"></div>
-<div id="pagination"></div>
+<main id="gameList"></main>
 
 <script>
-const gameGrid = document.getElementById('gameGrid');
-const searchInput = document.getElementById('search');
-
-let totalPages = 1;
 let currentPage = 1;
 const limit = 50;
-let debounceTimer = null;
 
-// Fetch games with pagination and search
-async function loadGames(page = 1, search = '') {
+async function loadGames(page = 1) {
+  const search = document.getElementById("search").value;
   try {
     const res = await fetch(`/games+img.json?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`);
-    const data = await res.json();
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      console.error("Failed to parse JSON:", text);
+      throw e;
+    }
 
-    if (!data || !Array.isArray(data.games)) throw new Error('Invalid response');
+    if (!data.games) throw new Error("Invalid response");
 
-    currentPage = Math.min(Math.max(1, data.page), Math.ceil(data.total / limit));
-    totalPages = Math.max(1, Math.ceil(data.total / limit));
+    const gameList = document.getElementById("gameList");
+    gameList.innerHTML = "";
+    data.games.forEach(g => {
+      const div = document.createElement("div");
+      div.className = "game";
+      div.innerHTML = `
+        <img src="${g.image}" alt="${g.title}" />
+        <a href="${g.url}" target="_blank">${g.title}</a>
+      `;
+      gameList.appendChild(div);
+    });
 
-    renderGames(data.games);
-    renderPagination();
+    // Update pagination info
+    const totalPages = Math.ceil(data.total / limit);
+    document.getElementById("pageInfo").textContent = `Page ${data.page} / ${totalPages}`;
+    currentPage = data.page;
+
+    // Disable/enable buttons
+    document.getElementById("prevPage").disabled = currentPage <= 1;
+    document.getElementById("nextPage").disabled = currentPage >= totalPages;
   } catch (err) {
-    console.error('Failed to load games:', err);
-    gameGrid.innerHTML = '<p>Error loading games.</p>';
-    document.getElementById('pagination').innerHTML = '';
+    console.error("Failed to load games:", err);
+    document.getElementById("gameList").innerHTML = "<p>Error loading games.</p>";
   }
 }
 
-// Render games grid
-function renderGames(games) {
-  if (!games || games.length === 0) {
-    gameGrid.innerHTML = '<p>No games found.</p>';
-    return;
-  }
-  gameGrid.innerHTML = games.map(g => `
-    <div class="game-card">
-      <img src="${g.img || '/images/_.jpg'}" alt="${g.title}">
-      <a href="${g.url}">${g.title}</a>
-    </div>
-  `).join('');
-}
-
-// Render pagination dynamically
-function renderPagination() {
-  const paginationDiv = document.getElementById('pagination');
-  paginationDiv.innerHTML = `
-    <button ${currentPage <= 1 ? 'disabled' : ''} onclick="loadGames(${currentPage - 1}, '${searchInput.value}')">Prev</button>
-    Page ${currentPage} of ${totalPages}
-    <button ${currentPage >= totalPages ? 'disabled' : ''} onclick="loadGames(${currentPage + 1}, '${searchInput.value}')">Next</button>
-  `;
-}
-
-// Debounce search input
-searchInput.addEventListener('input', () => {
-  clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => loadGames(1, searchInput.value), 300);
+// Event listeners
+document.getElementById("prevPage").addEventListener("click", () => {
+  if (currentPage > 1) loadGames(currentPage - 1);
 });
+document.getElementById("nextPage").addEventListener("click", () => loadGames(currentPage + 1));
+document.getElementById("search").addEventListener("input", () => loadGames(1));
 
 // Initial load
 loadGames();
