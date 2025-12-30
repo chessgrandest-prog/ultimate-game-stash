@@ -14,7 +14,7 @@
   <button id="nextPage">Next</button>
   <span id="pageInfo"></span>
 </header>
-<main id="gameList"></main>
+<main id="gameList" class="games-grid"></main>
 
 <script>
 let currentPage = 1;
@@ -50,13 +50,19 @@ async function loadGames(page = 1) {
     const gameList = document.getElementById("gameList");
     gameList.innerHTML = "";
     data.games.forEach(g => {
-      const div = document.createElement("div");
-      div.className = "game";
-      div.innerHTML = `
-        <img src="${g.image}" alt="${g.title}" />
-        <a href="${g.url}" target="_blank">${g.title}</a>
+      const a = document.createElement("a");
+      a.className = "game-card";
+      a.href = g.url;
+      a.target = "_blank";
+      a.innerHTML = `
+        <div class="thumbnail-container">
+          <img src="${g.image}" alt="${g.title}" loading="lazy" />
+        </div>
+        <div class="game-info">
+          <div class="game-title">${g.title}</div>
+        </div>
       `;
-      gameList.appendChild(div);
+      gameList.appendChild(a);
     });
 
     // Update pagination info

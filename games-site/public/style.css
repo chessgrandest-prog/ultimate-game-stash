@@ -116,6 +116,11 @@ h2 {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-size: 14px;
+}
+
+.game-info {
+  background: var(--card-bg);
 }
 
 .favorite-btn {
