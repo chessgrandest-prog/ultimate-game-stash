@@ -1,9 +1,8 @@
 import { unzipSync } from 'fflate';
 
 const GAMES_JSON_URL = 'https://raw.githubusercontent.com/chessgrandest-prog/ultimate-game-stash/refs/heads/main/games-site/games+img.json';
-const TERRARIA_ZIP_URL = 'https://github.com/chessgrandest-prog/ultimate-game-stash/releases/download/terraria.zip/terraria.zip';
+const TERRARIA_ZIP_URL = 'https://github.com/chessgrandest-prog/ultimate-game-stash/raw/refs/heads/main/games-site/terraria.zip';
 
-// Escape HTML for iframe srcdoc
 function escapeHtml(str) {
   return str
     .replace(/&/g, '&amp;')
@@ -14,14 +13,12 @@ function escapeHtml(str) {
     .replace(/`/g, '&#96;');
 }
 
-// Add COEP / COOP headers
 const addWasmHeaders = (res) => {
   res.headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
   res.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
   return res;
 };
 
-// Cache ZIP in memory
 let cachedZip = null;
 
 export default {
@@ -67,7 +64,7 @@ export default {
         }), { headers: { 'Content-Type': 'application/json; charset=UTF-8' } }));
 
       } catch (err) {
-        console.error(err);
+        console.error('Error fetching games.json:', err);
         return new Response('Error fetching games.json', { status: 500 });
       }
     }
@@ -80,9 +77,18 @@ export default {
 
         // Fetch and cache ZIP once
         if (!cachedZip) {
+          console.log('Fetching Terraria ZIP...');
           const zipRes = await fetch(TERRARIA_ZIP_URL);
+          console.log('ZIP fetch status:', zipRes.status, 'content-type:', zipRes.headers.get('content-type'));
+
           if (!zipRes.ok) return new Response('Failed to fetch Terraria ZIP', { status: 500 });
-          cachedZip = unzipSync(new Uint8Array(await zipRes.arrayBuffer()));
+          const buffer = new Uint8Array(await zipRes.arrayBuffer());
+          try {
+            cachedZip = unzipSync(buffer);
+          } catch (e) {
+            console.error('Failed to unzip Terraria ZIP:', e);
+            return new Response('Invalid ZIP file', { status: 500 });
+          }
         }
 
         if (!(filePath in cachedZip)) return new Response('File not found in ZIP', { status: 404 });
@@ -101,7 +107,7 @@ export default {
         }));
 
       } catch (err) {
-        console.error(err);
+        console.error('Failed to load Terraria from ZIP:', err);
         return new Response('Failed to load Terraria from ZIP.', { status: 500 });
       }
     }
@@ -113,7 +119,6 @@ export default {
         const gamesRes = await fetch(GAMES_JSON_URL);
         const games = await gamesRes.json();
 
-        // Normalize URLs (remove trailing slashes)
         const normalize = str => str.replace(/\/+$/, '');
         const game = games.find(g => normalize(g.url) === normalize(gameFile));
 
@@ -154,7 +159,7 @@ export default {
         return addWasmHeaders(new Response(iframePage, { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }));
 
       } catch (err) {
-        console.error(err);
+        console.error('Failed to load game:', err);
         return new Response('Failed to load game.', { status: 500 });
       }
     }
