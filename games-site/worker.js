@@ -4,13 +4,12 @@ const GAMES_JSON_URL = 'https://raw.githubusercontent.com/chessgrandest-prog/ult
 const TERRARIA_ZIP_URL = 'https://github.com/chessgrandest-prog/ultimate-game-stash/raw/refs/heads/main/games-site/terraria.zip';
 
 function escapeHtml(str) {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-    .replace(/`/g, '&#96;');
+  return str.replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+            .replace(/`/g, '&#96;');
 }
 
 const addWasmHeaders = (res) => {
@@ -21,38 +20,37 @@ const addWasmHeaders = (res) => {
 
 let cachedZip = null;
 
-// Load and cache ZIP
 async function loadTerrariaZip() {
   if (!cachedZip) {
+    console.log('[DEBUG] Fetching Terraria ZIP...');
     const zipRes = await fetch(TERRARIA_ZIP_URL);
-    if (!zipRes.ok) throw new Error(`Failed to fetch Terraria ZIP: ${zipRes.status}`);
+    if (!zipRes.ok) throw new Error('Failed to fetch Terraria ZIP');
     const buffer = new Uint8Array(await zipRes.arrayBuffer());
     const zipFiles = unzipSync(buffer);
     cachedZip = {};
     for (const [path, content] of Object.entries(zipFiles)) {
       cachedZip[path.replace(/\\/g, '/')] = content;
     }
-    console.log('ZIP loaded. Files:', Object.keys(cachedZip));
+    console.log('[DEBUG] ZIP loaded. Files:', Object.keys(cachedZip));
   }
 }
 
-// Lookup file in ZIP (folder-aware)
 function getZipFile(requestPath) {
   const cleanPath = requestPath.replace(/^\/+|\/+$/g, '');
   let content = cachedZip[cleanPath];
   if (!content) {
     const lowerPath = cleanPath.toLowerCase();
     for (const zipPath of Object.keys(cachedZip)) {
-      if (zipPath.toLowerCase() === lowerPath || zipPath.toLowerCase().endsWith('/' + lowerPath)) {
+      if (zipPath.toLowerCase().endsWith('/' + lowerPath) || zipPath.toLowerCase() === lowerPath) {
         content = cachedZip[zipPath];
         break;
       }
     }
   }
+  if (!content) console.log('[DEBUG] File not found in ZIP:', cleanPath);
   return content;
 }
 
-// Determine MIME type
 function getContentType(filePath) {
   if (filePath.endsWith('.wasm')) return 'application/wasm';
   if (filePath.endsWith('.js')) return 'application/javascript';
@@ -67,19 +65,21 @@ export default {
   async fetch(request) {
     const url = new URL(request.url);
 
-    // Serve main index.html
+    console.log('[DEBUG] Incoming request:', url.pathname);
+
+    // Serve index.html
     if (url.pathname === '/' || url.pathname === '/index.html') {
       const res = await fetch('https://raw.githubusercontent.com/chessgrandest-prog/ultimate-game-stash/refs/heads/main/games-site/index.html');
       return addWasmHeaders(new Response(await res.text(), { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }));
     }
 
-    // Serve CSS
+    // Serve style.css
     if (url.pathname === '/style.css') {
       const res = await fetch('https://raw.githubusercontent.com/chessgrandest-prog/ultimate-game-stash/refs/heads/main/games-site/style.css');
       return addWasmHeaders(new Response(await res.text(), { headers: { 'Content-Type': 'text/css; charset=UTF-8' } }));
     }
 
-    // Games JSON
+    // Serve games+img.json
     if (url.pathname === '/games+img.json') {
       try {
         const gamesRes = await fetch(GAMES_JSON_URL);
@@ -104,30 +104,24 @@ export default {
           limit,
           games: paginatedGames
         }), { headers: { 'Content-Type': 'application/json; charset=UTF-8' } }));
-
       } catch (err) {
-        console.error('Error fetching games.json:', err);
+        console.error('[DEBUG] Error fetching games.json:', err);
         return new Response('Error fetching games.json', { status: 500 });
       }
     }
 
-    // Serve Terraria and subpaths
+    // Serve Terraria ZIP files
     if (url.pathname.startsWith('/terraria/')) {
       try {
-        let debugMsg = '';
-        debugMsg += `Request path: ${url.pathname}\n`;
-
         await loadTerrariaZip();
 
         let filePath = url.pathname.replace('/terraria/', '');
         if (!filePath) filePath = 'index.html';
-        debugMsg += `Normalized path: ${filePath}\n`;
+
+        console.log('[DEBUG] Requested Terraria file:', filePath);
 
         const contentBuffer = getZipFile(filePath);
-        if (!contentBuffer) {
-          debugMsg += `Available ZIP files: ${Object.keys(cachedZip).join(', ')}\n`;
-          return new Response(`File not found in ZIP\n${debugMsg}`, { status: 404 });
-        }
+        if (!contentBuffer) return new Response('File not found in ZIP', { status: 404 });
 
         const isText = filePath.endsWith('.html') || filePath.endsWith('.js') || filePath.endsWith('.css');
         return addWasmHeaders(new Response(isText ? new TextDecoder().decode(contentBuffer) : contentBuffer, {
@@ -135,12 +129,12 @@ export default {
         }));
 
       } catch (err) {
-        console.error('Terraria load error:', err);
-        return new Response(`Failed to load Terraria\nError: ${err}`, { status: 500 });
+        console.error('[DEBUG] Terraria load error:', err);
+        return new Response('Failed to load Terraria.', { status: 500 });
       }
     }
 
-    // Individual game pages
+    // Serve individual game pages
     if (url.pathname.startsWith('/game/')) {
       try {
         const gameFile = decodeURIComponent(url.pathname.replace('/game/', ''));
@@ -151,22 +145,30 @@ export default {
         const game = games.find(g => normalize(g.url) === normalize(gameFile));
         if (!game) return new Response('Game not found', { status: 404 });
 
-        if (game.url.includes(".github.io")) {
-          const iframePage = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${game.title}</title>
-<style>html,body{margin:0;padding:0;height:100%}iframe{width:100%;height:100%;border:none}</style>
-</head>
-<body>
-<iframe src="${game.url}" frameborder="0" allowfullscreen></iframe>
-</body>
-</html>`;
-          return addWasmHeaders(new Response(iframePage, { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }));
+        console.log('[DEBUG] Serving game:', game.title, 'URL:', game.url);
+
+        // Internal paths (like /terraria/)
+        if (game.url.startsWith('/')) {
+          // route directly without fetch
+          if (game.url.startsWith('/terraria/')) {
+            await loadTerrariaZip();
+            const path = game.url.replace(/^\/terraria\//, '');
+            console.log('[DEBUG] Internal Terraria path for game:', path);
+            const content = getZipFile(path || 'index.html');
+            if (!content) return new Response('Internal game file not found in ZIP', { status: 404 });
+            const isText = path.endsWith('.html') || path.endsWith('.js') || path.endsWith('.css');
+            return addWasmHeaders(new Response(isText ? new TextDecoder().decode(content) : content, {
+              headers: { 'Content-Type': getContentType(path) }
+            }));
+          }
+
+          // Other internal HTML pages
+          const internalRes = await fetch(`${url.origin}${game.url}`);
+          const html = await internalRes.text();
+          return addWasmHeaders(new Response(html, { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }));
         }
 
+        // External URLs (like GitHub Pages)
         const gameRes = await fetch(game.url);
         const gameHtml = await gameRes.text();
         const iframePage = `<!DOCTYPE html>
@@ -182,10 +184,9 @@ export default {
 </body>
 </html>`;
         return addWasmHeaders(new Response(iframePage, { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }));
-
       } catch (err) {
-        console.error('Failed to load game:', err);
-        return new Response(`Failed to load game\nError: ${err}`, { status: 500 });
+        console.error('[DEBUG] Failed to load game:', err);
+        return new Response('Failed to load game.', { status: 500 });
       }
     }
 
