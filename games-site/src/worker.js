@@ -50,8 +50,8 @@ export default {
         
         if (!gameUrl) return new Response("Missing game URL", { status: 400 });
 
-        // If it's a raw github URL, proxy it through our worker to avoid blocks and set headers
-        if (gameUrl.includes("raw.githubusercontent.com")) {
+        // If it's a raw github URL or jsdelivr, proxy it through our worker to avoid blocks and set headers
+        if (gameUrl.includes("raw.githubusercontent.com") || gameUrl.includes("cdn.jsdelivr.net")) {
           gameUrl = `/proxy/${gameUrl}`;
         }
 
@@ -72,7 +72,7 @@ export default {
                 <span>${gameTitle}</span>
                 <a href="/">Back to Stash</a>
               </div>
-              <iframe src="${gameUrl}" allow="autoplay; fullscreen; keyboard" allowfullscreen></iframe>
+              <iframe src="${gameUrl}" allow="autoplay; fullscreen" allowfullscreen></iframe>
             </body>
           </html>
         `;
@@ -97,13 +97,13 @@ export default {
         const headers = new Headers(res.headers);
         const contentType = headers.get("Content-Type") || "";
 
-        // Force HTML type for GitHub raw links that default to plain text
-        if (targetUrl.endsWith(".html") || targetUrl.endsWith(".htm") || contentType.includes("text/plain")) {
-          headers.set("Content-Type", "text/html; charset=UTF-8");
-        } else if (targetUrl.endsWith(".js")) {
+        // Determine correct Content-Type based on extension first, then fallback to original
+        if (targetUrl.endsWith(".js") || targetUrl.includes(".js?")) {
           headers.set("Content-Type", "application/javascript");
-        } else if (targetUrl.endsWith(".css")) {
+        } else if (targetUrl.endsWith(".css") || targetUrl.includes(".css?")) {
           headers.set("Content-Type", "text/css");
+        } else if (targetUrl.endsWith(".html") || targetUrl.endsWith(".htm") || contentType.includes("text/plain")) {
+          headers.set("Content-Type", "text/html; charset=UTF-8");
         }
 
         headers.set("Cross-Origin-Embedder-Policy", "require-corp");
@@ -116,8 +116,9 @@ export default {
           let html = await res.text();
           const baseUrl = targetUrl.substring(0, targetUrl.lastIndexOf("/") + 1);
           
-          // Inject a helper script to intercept fetch and XHR
+          // Inject a base tag and helper script
           const proxyScript = `
+<base href="${baseUrl}">
 <script>
 (function() {
   const proxyPrefix = window.location.origin + '/proxy/';
@@ -185,6 +186,19 @@ export default {
       if (Object.prototype.hasOwnProperty.call(cls.prototype, 'href') || 'href' in cls.prototype) patchProperty(cls.prototype, 'href');
     }
   });
+
+  // Intercept new elements added to the DOM
+  const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      mutation.addedNodes.forEach((node) => {
+        if (node.nodeType === 1) { // Element
+          if (node.src) node.src = wrapUrl(node.getAttribute('src'));
+          if (node.href) node.href = wrapUrl(node.getAttribute('href'));
+        }
+      });
+    });
+  });
+  observer.observe(document.documentElement, { childList: true, subtree: true });
 })();
 </script>`;
 
