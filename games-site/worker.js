@@ -10,16 +10,16 @@ function escapeHtml(str) {
     .replace(/`/g, '&#96;');
 }
 
+// Add cross-origin headers for WASM
+const addWasmHeaders = (res) => {
+  res.headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
+  res.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
+  return res;
+};
+
 export default {
   async fetch(request) {
     const url = new URL(request.url);
-
-    // Helper: add COOP / CORP headers for WASM
-    const addWasmHeaders = (res) => {
-      res.headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
-      res.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
-      return res;
-    };
 
     // Serve index.html
     if (url.pathname === '/' || url.pathname === '/index.html') {
@@ -33,7 +33,7 @@ export default {
       return addWasmHeaders(new Response(await res.text(), { headers: { 'Content-Type': 'text/css; charset=UTF-8' } }));
     }
 
-    // Paginated & filtered games
+    // Paginated & filtered games JSON
     if (url.pathname === '/games+img.json') {
       try {
         const gamesRes = await fetch(GAMES_JSON_URL);
@@ -59,8 +59,35 @@ export default {
           games: paginatedGames
         }), { headers: { 'Content-Type': 'application/json; charset=UTF-8' } }));
 
-      } catch (err) {
+      } catch {
         return new Response('Error fetching games.json', { status: 500 });
+      }
+    }
+
+    // Serve Terraria WASM and other assets
+    if (url.pathname.startsWith('/terraria/')) {
+      try {
+        const filePath = url.pathname.replace('/terraria/', '');
+        const fileUrl = `https://raw.githubusercontent.com/chessgrandest-prog/ultimate-game-stash/refs/heads/main/games-site/terraria/${filePath || 'index.html'}`;
+
+        const res = await fetch(fileUrl);
+        if (!res.ok) return new Response('File not found', { status: 404 });
+
+        let contentType = 'text/html';
+        if (filePath.endsWith('.js')) contentType = 'application/javascript';
+        else if (filePath.endsWith('.wasm')) contentType = 'application/wasm';
+        else if (filePath.endsWith('.css')) contentType = 'text/css';
+        else if (filePath.endsWith('.png')) contentType = 'image/png';
+        else if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) contentType = 'image/jpeg';
+
+        const body = filePath.endsWith('.wasm') || filePath.endsWith('.png') || filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')
+          ? await res.arrayBuffer()
+          : await res.text();
+
+        return addWasmHeaders(new Response(body, { headers: { 'Content-Type': contentType } }));
+
+      } catch {
+        return new Response('Failed to load Terraria file.', { status: 500 });
       }
     }
 
@@ -73,11 +100,6 @@ export default {
 
         const game = games.find(g => g.url.endsWith(gameFile) || g.url === gameFile);
         if (!game) return new Response('Game not found', { status: 404 });
-
-        // WASM / Terraria games: top-level redirect with headers
-        if (game.url.startsWith('/terraria/')) {
-          return addWasmHeaders(Response.redirect(new URL(game.url, url.origin), 302));
-        }
 
         // GitHub Pages iframe
         if (game.url.includes(".github.io")) {
@@ -118,6 +140,7 @@ export default {
       }
     }
 
+    // Default: just fetch
     return fetch(request);
   }
 };
