@@ -116,10 +116,101 @@ export default {
           let html = await res.text();
           const baseUrl = targetUrl.substring(0, targetUrl.lastIndexOf("/") + 1);
           
-          // Basic rewrite for relative src and href (handles simple cases)
-          html = html.replace(/(src|href)=["'](?!(http|https|\/\/))([^"']+)["']/gi, (match, p1, p2, p3) => {
-            const absolute = new URL(p3, baseUrl).href;
-            return `${p1}="/proxy/${absolute}"`;
+          // Inject a helper script to intercept fetch and XHR
+          const proxyScript = `
+<script>
+(function() {
+  const proxyPrefix = window.location.origin + '/proxy/';
+  const baseUrl = ${JSON.stringify(baseUrl)};
+
+  function wrapUrl(url) {
+    if (!url || typeof url !== 'string') return url;
+    if (url.startsWith(proxyPrefix) || url.startsWith('data:') || url.startsWith('blob:')) return url;
+    
+    let absoluteUrl;
+    try {
+      absoluteUrl = new URL(url, baseUrl).href;
+    } catch (e) {
+      return url;
+    }
+
+    if (absoluteUrl.startsWith(window.location.origin)) return url;
+    return proxyPrefix + absoluteUrl;
+  }
+
+  // Intercept fetch
+  const originalFetch = window.fetch;
+  window.fetch = function(input, init) {
+    if (typeof input === 'string') {
+      input = wrapUrl(input);
+    } else if (input instanceof Request) {
+      const newUrl = wrapUrl(input.url);
+      if (newUrl !== input.url) {
+        input = new Request(newUrl, input);
+      }
+    }
+    return originalFetch(input, init);
+  };
+
+  // Intercept XHR
+  const originalOpen = window.XMLHttpRequest.prototype.open;
+  window.XMLHttpRequest.prototype.open = function(method, url, ...args) {
+    return originalOpen.apply(this, [method, wrapUrl(url), ...args]);
+  };
+
+  // Intercept worker creation if possible (common in some games)
+  const OriginalWorker = window.Worker;
+  window.Worker = function(url, options) {
+    return new OriginalWorker(wrapUrl(url), options);
+  };
+
+  // Intercept dynamically set src/href properties
+  const patchProperty = (proto, prop) => {
+    const descriptor = Object.getOwnPropertyDescriptor(proto, prop);
+    if (!descriptor || !descriptor.set) return;
+    const originalSet = descriptor.set;
+    Object.defineProperty(proto, prop, {
+      set: function(value) {
+        return originalSet.call(this, wrapUrl(value));
+      },
+      get: descriptor.get,
+      enumerable: descriptor.enumerable,
+      configurable: descriptor.configurable
+    });
+  };
+
+  [HTMLImageElement, HTMLScriptElement, HTMLSourceElement, HTMLVideoElement, HTMLAudioElement, HTMLLinkElement, HTMLIFrameElement].forEach(cls => {
+    if (cls && cls.prototype) {
+      if (Object.prototype.hasOwnProperty.call(cls.prototype, 'src') || 'src' in cls.prototype) patchProperty(cls.prototype, 'src');
+      if (Object.prototype.hasOwnProperty.call(cls.prototype, 'href') || 'href' in cls.prototype) patchProperty(cls.prototype, 'href');
+    }
+  });
+})();
+</script>`;
+
+          // Insert script at the beginning of head or body
+          if (html.includes("<head>")) {
+            html = html.replace("<head>", "<head>" + proxyScript);
+          } else if (html.includes("<body>")) {
+            html = html.replace("<body>", "<body>" + proxyScript);
+          } else {
+            html = proxyScript + html;
+          }
+
+          // Improved regex for src, href, and action attributes
+          html = html.replace(/(src|href|action)=["']([^"']+)["']/gi, (match, attr, val) => {
+            // Skip already proxied, data, or absolute URLs that are same-origin
+            if (val.startsWith("/proxy/") || val.startsWith("data:") || val.startsWith("blob:") || val.startsWith("#")) {
+              return match;
+            }
+            
+            try {
+              const absolute = new URL(val, baseUrl).href;
+              // If it's an external URL, proxy it
+              return `${attr}="/proxy/${absolute}"`;
+            } catch (e) {
+              return match;
+            }
           });
 
           return new Response(html, { status: res.status, headers });
