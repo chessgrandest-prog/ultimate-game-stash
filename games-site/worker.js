@@ -21,6 +21,47 @@ const addWasmHeaders = (res) => {
 
 let cachedZip = null;
 
+async function loadTerrariaZip() {
+  if (!cachedZip) {
+    const zipRes = await fetch(TERRARIA_ZIP_URL);
+    if (!zipRes.ok) throw new Error('Failed to fetch Terraria ZIP');
+    const buffer = new Uint8Array(await zipRes.arrayBuffer());
+    const zipFiles = unzipSync(buffer);
+    cachedZip = {};
+    for (const [path, content] of Object.entries(zipFiles)) {
+      cachedZip[path.replace(/\\/g, '/')] = content;
+    }
+    console.log('ZIP loaded. Files:', Object.keys(cachedZip));
+  }
+}
+
+// Map requested path to ZIP content (folder-aware)
+function getZipFile(requestPath) {
+  const cleanPath = requestPath.replace(/^\/+|\/+$/g, '');
+  let content = cachedZip[cleanPath];
+  if (!content) {
+    const lowerPath = cleanPath.toLowerCase();
+    for (const zipPath of Object.keys(cachedZip)) {
+      if (zipPath.toLowerCase().endsWith('/' + lowerPath) || zipPath.toLowerCase() === lowerPath) {
+        content = cachedZip[zipPath];
+        break;
+      }
+    }
+  }
+  return content;
+}
+
+// Determine MIME type
+function getContentType(filePath) {
+  if (filePath.endsWith('.wasm')) return 'application/wasm';
+  if (filePath.endsWith('.js')) return 'application/javascript';
+  if (filePath.endsWith('.css')) return 'text/css';
+  if (filePath.endsWith('.png')) return 'image/png';
+  if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) return 'image/jpeg';
+  if (filePath.endsWith('.html')) return 'text/html';
+  return 'application/octet-stream';
+}
+
 export default {
   async fetch(request) {
     const url = new URL(request.url);
@@ -69,60 +110,25 @@ export default {
       }
     }
 
-    // Serve Terraria from cached ZIP (folder-aware)
+    // Serve Terraria + all subpaths
     if (url.pathname.startsWith('/terraria/')) {
       try {
-        let filePath = url.pathname.replace('/terraria/', '').replace(/^\/+|\/+$/g, '');
+        await loadTerrariaZip();
+
+        let filePath = url.pathname.replace('/terraria/', '');
         if (!filePath) filePath = 'index.html';
 
-        if (!cachedZip) {
-          console.log('Fetching Terraria ZIP...');
-          const zipRes = await fetch(TERRARIA_ZIP_URL);
-          if (!zipRes.ok) return new Response('Failed to fetch Terraria ZIP', { status: 500 });
-
-          const buffer = new Uint8Array(await zipRes.arrayBuffer());
-          try {
-            const zipFiles = unzipSync(buffer);
-            cachedZip = {};
-            // Normalize paths (forward slashes)
-            for (const [path, content] of Object.entries(zipFiles)) {
-              cachedZip[path.replace(/\\/g, '/')] = content;
-            }
-            console.log('ZIP files:', Object.keys(cachedZip));
-          } catch (e) {
-            console.error('Failed to unzip Terraria ZIP:', e);
-            return new Response('Invalid ZIP file', { status: 500 });
-          }
-        }
-
-        // Try exact match or search inside folders
-        let contentBuffer = cachedZip[filePath];
-        if (!contentBuffer) {
-          const lowerFile = filePath.toLowerCase();
-          for (const zipPath of Object.keys(cachedZip)) {
-            if (zipPath.toLowerCase().endsWith('/' + lowerFile) || zipPath.toLowerCase() === lowerFile) {
-              contentBuffer = cachedZip[zipPath];
-              break;
-            }
-          }
-        }
+        const contentBuffer = getZipFile(filePath);
         if (!contentBuffer) return new Response('File not found in ZIP', { status: 404 });
 
         const isText = filePath.endsWith('.html') || filePath.endsWith('.js') || filePath.endsWith('.css');
-        const contentType = filePath.endsWith('.wasm') ? 'application/wasm' :
-                            filePath.endsWith('.js') ? 'application/javascript' :
-                            filePath.endsWith('.css') ? 'text/css' :
-                            filePath.endsWith('.png') ? 'image/png' :
-                            filePath.endsWith('.jpg') || filePath.endsWith('.jpeg') ? 'image/jpeg' :
-                            'application/octet-stream';
-
         return addWasmHeaders(new Response(isText ? new TextDecoder().decode(contentBuffer) : contentBuffer, {
-          headers: { 'Content-Type': contentType }
+          headers: { 'Content-Type': getContentType(filePath) }
         }));
 
       } catch (err) {
-        console.error('Failed to load Terraria from ZIP:', err);
-        return new Response('Failed to load Terraria from ZIP.', { status: 500 });
+        console.error('Terraria load error:', err);
+        return new Response('Failed to load Terraria.', { status: 500 });
       }
     }
 
@@ -138,7 +144,6 @@ export default {
 
         if (!game) return new Response('Game not found', { status: 404 });
 
-        // GitHub Pages iframe
         if (game.url.includes(".github.io")) {
           const iframePage = `<!DOCTYPE html>
 <html lang="en">
@@ -155,7 +160,6 @@ export default {
           return addWasmHeaders(new Response(iframePage, { headers: { 'Content-Type': 'text/html; charset=UTF-8' } }));
         }
 
-        // Otherwise, fetch raw HTML
         const gameRes = await fetch(game.url);
         const gameHtml = await gameRes.text();
         const iframePage = `<!DOCTYPE html>
