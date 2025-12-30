@@ -10,7 +10,7 @@ function escapeHtml(str) {
     .replace(/`/g, '&#96;');
 }
 
-// Add cross-origin headers for WASM
+// Add COEP / COOP headers for WASM
 const addWasmHeaders = (res) => {
   res.headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
   res.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
@@ -64,15 +64,13 @@ export default {
       }
     }
 
-    // Serve Terraria WASM and assets
+    // 🚀 Serve Terraria WASM and all assets via Worker proxy
     if (url.pathname.startsWith('/terraria/')) {
       try {
-        // ✅ Fixed filePath fallback
         let filePath = url.pathname.replace('/terraria/', '');
         if (!filePath || filePath === '') filePath = 'index.html';
 
         const fileUrl = `https://raw.githubusercontent.com/chessgrandest-prog/ultimate-game-stash/refs/heads/main/games-site/terraria/${filePath}`;
-
         const res = await fetch(fileUrl);
         if (!res.ok) return new Response('File not found', { status: 404 });
 
@@ -91,7 +89,7 @@ export default {
 
         return addWasmHeaders(new Response(body, { headers: { 'Content-Type': contentType } }));
 
-      } catch {
+      } catch (err) {
         return new Response('Failed to load Terraria file.', { status: 500 });
       }
     }
