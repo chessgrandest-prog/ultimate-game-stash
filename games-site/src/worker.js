@@ -115,7 +115,7 @@ export default {
         // If it's HTML, rewrite relative URLs to use our proxy
         if (headers.get("Content-Type").includes("text/html")) {
           let html = await res.text();
-          // Use encodeURI on baseUrl to handle spaces correctly
+          const origin = new URL(request.url).origin;
           const baseUrl = encodeURI(targetUrl.substring(0, targetUrl.lastIndexOf("/") + 1));
           
           // Inject a base tag and helper script
@@ -123,12 +123,14 @@ export default {
 <base href="${baseUrl}">
 <script>
 (function() {
-  const proxyPrefix = window.location.origin + '/proxy/';
+  const workerOrigin = "${origin}";
+  const proxyPrefix = workerOrigin + '/proxy/';
   const baseUrl = ${JSON.stringify(baseUrl)};
 
   function wrapUrl(url) {
     if (!url || typeof url !== 'string') return url;
-    if (url.startsWith(proxyPrefix) || url.startsWith('data:') || url.startsWith('blob:')) return url;
+    // Check if it's already proxied (handle both relative and absolute proxy URLs)
+    if (url.startsWith(proxyPrefix) || url.startsWith('/proxy/') || url.startsWith('data:') || url.startsWith('blob:')) return url;
     
     let absoluteUrl;
     try {
@@ -137,7 +139,8 @@ export default {
       return url;
     }
 
-    if (absoluteUrl.startsWith(window.location.origin)) return url;
+    // Don't proxy if it's already on our worker origin
+    if (absoluteUrl.startsWith(workerOrigin)) return url;
     return proxyPrefix + absoluteUrl;
   }
 
@@ -216,14 +219,14 @@ export default {
           // Improved regex for src, href, and action attributes
           html = html.replace(/(src|href|action)=["']([^"']+)["']/gi, (match, attr, val) => {
             // Skip already proxied, data, or absolute URLs that are same-origin
-            if (val.startsWith("/proxy/") || val.startsWith("data:") || val.startsWith("blob:") || val.startsWith("#")) {
+            if (val.startsWith(origin + "/proxy/") || val.startsWith("/proxy/") || val.startsWith("data:") || val.startsWith("blob:") || val.startsWith("#")) {
               return match;
             }
             
             try {
               const absolute = new URL(val, baseUrl).href;
-              // If it's an external URL, proxy it
-              return `${attr}="/proxy/${absolute}"`;
+              // Use full absolute URL for the proxy to avoid issues with <base> tag
+              return `${attr}="${origin}/proxy/${absolute}"`;
             } catch (e) {
               return match;
             }
