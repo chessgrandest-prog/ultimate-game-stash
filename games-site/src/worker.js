@@ -4,27 +4,9 @@ export default {
     const path = url.pathname;
 
     try {
-      // 1️⃣ Serve static assets
-      const assetResponse = await env.ASSETS.fetch(request);
-      if (assetResponse.status !== 404) return assetResponse;
-
-      // 2️⃣ Serve Terraria files from GitHub
-      if (path.startsWith("/terraria/")) {
-        const githubUrl = `https://chessgrandest-prog.github.io/terraria-wasm1${path.replace("/terraria", "")}`;
-        const res = await fetch(githubUrl);
-        if (!res.ok) {
-          console.error(`Terraria fetch failed: ${res.status} ${res.statusText} -> ${githubUrl}`);
-          return new Response("Terraria file not found", { status: 404 });
-        }
-        const headers = new Headers(res.headers);
-        headers.set("Cross-Origin-Embedder-Policy", "require-corp");
-        headers.set("Cross-Origin-Opener-Policy", "same-origin");
-        return new Response(res.body, { status: res.status, headers });
-      }
-
-      // 3️⃣ Serve games+img.json with pagination and favorites
+      // 1️⃣ Serve games+img.json with pagination and favorites
       if (path === "/games+img.json") {
-        const res = await env.ASSETS.fetch(new Request(`${env.ASSETS.url}/games+img.json`));
+        const res = await env.ASSETS.fetch(new Request(new URL("/games+img.json", request.url)));
         const text = await res.text();
 
         let games;
@@ -53,6 +35,24 @@ export default {
         return new Response(JSON.stringify({ total, page, limit, games: paginatedGames }), {
           headers: { "Content-Type": "application/json; charset=UTF-8" }
         });
+      }
+
+      // 2️⃣ Serve static assets
+      const assetResponse = await env.ASSETS.fetch(request);
+      if (assetResponse.status !== 404) return assetResponse;
+
+      // 3️⃣ Serve Terraria files from GitHub
+      if (path.startsWith("/terraria/")) {
+        const githubUrl = `https://chessgrandest-prog.github.io/terraria-wasm1${path.replace("/terraria", "")}`;
+        const res = await fetch(githubUrl);
+        if (!res.ok) {
+          console.error(`Terraria fetch failed: ${res.status} ${res.statusText} -> ${githubUrl}`);
+          return new Response("Terraria file not found", { status: 404 });
+        }
+        const headers = new Headers(res.headers);
+        headers.set("Cross-Origin-Embedder-Policy", "require-corp");
+        headers.set("Cross-Origin-Opener-Policy", "same-origin");
+        return new Response(res.body, { status: res.status, headers });
       }
 
       // 4️⃣ Fallback
