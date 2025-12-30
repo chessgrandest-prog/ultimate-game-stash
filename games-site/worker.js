@@ -71,12 +71,29 @@ export default {
         const gamesRes = await fetch(GAMES_JSON_URL);
         const games = await gamesRes.json();
 
-        const game = games.find(g => g.url.endsWith(gameFile));
+        const game = games.find(g => g.url.endsWith(gameFile) || g.url === gameFile);
         if (!game) return new Response('Game not found', { status: 404 });
 
+        // Detect GitHub Pages URLs
+        if (game.url.includes(".github.io")) {
+          const iframePage = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${game.title}</title>
+<style>html,body{margin:0;padding:0;height:100%}iframe{width:100%;height:100%;border:none}</style>
+</head>
+<body>
+<iframe src="${game.url}" frameborder="0" allowfullscreen></iframe>
+</body>
+</html>`;
+          return new Response(iframePage, { headers: { 'Content-Type': 'text/html; charset=UTF-8' } });
+        }
+
+        // Otherwise, fetch raw HTML for normal games
         const gameRes = await fetch(game.url);
         const gameHtml = await gameRes.text();
-
         const iframePage = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -89,8 +106,8 @@ export default {
 <iframe srcdoc="${escapeHtml(gameHtml)}"></iframe>
 </body>
 </html>`;
-
         return new Response(iframePage, { headers: { 'Content-Type': 'text/html; charset=UTF-8' } });
+
       } catch {
         return new Response('Failed to load game.', { status: 500 });
       }
