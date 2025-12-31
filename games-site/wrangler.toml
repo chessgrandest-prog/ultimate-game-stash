@@ -1,7 +1,11 @@
+[collections]
 name = "ultimate-game-stash"
-main = "src/worker.js"
-compatibility_date = "2025-12-30"
+mapping = "public"
 
-[assets]
-directory = "./public"
-binding = "ASSETS"
+[build]
+functions.installers = ["node_modules/.bin/next"]
+functions.node_modules = ["node_modules"]
+functions.base_path = "/next"
+
+[environments]
+default = "production"
